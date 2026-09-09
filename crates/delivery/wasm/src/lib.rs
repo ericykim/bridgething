@@ -465,7 +465,7 @@ impl WasmSession {
 #[wasm_bindgen(js_name = discoverManifest, unchecked_return_type = "OtaDiscoverManifest")]
 pub async fn discover_manifest(root_url: String) -> Result<JsValue, JsValue> {
   let fetch = HttpArtifactFetch::new(HttpExecutor::new(Arc::new(FetchTransport::new())));
-  let manifest: OtaDiscoverManifest = fetch_json(&fetch, &format!("{}/discover.json", root_url.trim_end_matches('/')))
+  let manifest: OtaDiscoverManifest = fetch_json(&fetch, &format!("{}/manifest.json", root_url.trim_end_matches('/')))
     .await
     .map_err(|e| JsValue::from_str(&format!("manifest fetch failed: {e}")))?;
   to_js(&manifest)

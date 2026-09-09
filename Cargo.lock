@@ -1169,6 +1169,7 @@ version = "0.12.5"
 dependencies = [
  "bytes",
  "futures",
+ "js-sys",
  "libbridgething",
  "serde",
  "serde_json",

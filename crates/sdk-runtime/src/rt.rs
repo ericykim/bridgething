@@ -18,6 +18,19 @@ pub fn now() -> Instant {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+pub fn unix_millis() -> u64 {
+  std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map(|since| since.as_millis() as u64)
+    .unwrap_or(0)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn unix_millis() -> u64 {
+  js_sys::Date::now() as u64
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn spawn<F: Future<Output = ()> + Send + 'static>(fut: F) {
   tokio::spawn(fut);
 }
