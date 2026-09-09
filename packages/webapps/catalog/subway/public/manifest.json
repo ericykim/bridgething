@@ -1,0 +1,24 @@
+{
+  "id": "01a08864-b3f8-7de8-864b-67e994fa8671",
+  "name": "Subway",
+  "version": "0.1.0",
+  "description": "Live MTA subway arrival times for your stations.",
+  "icon": "icon.svg",
+  "config": [
+    {
+      "type": "string",
+      "data": {
+        "key": "stations",
+        "label": "Station ids (comma-separated; pick stations in companion settings)"
+      }
+    },
+    {
+      "type": "string",
+      "data": {
+        "key": "mta_api_key",
+        "label": "MTA API key (api.mta.info)"
+      }
+    }
+  ],
+  "permissions": ["net.fetch"]
+}
