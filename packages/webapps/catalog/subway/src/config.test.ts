@@ -22,20 +22,16 @@ describe('parseStationIds', () => {
 });
 
 describe('configState', () => {
-  test('unconfigured when stations are missing, whatever the key says', () => {
-    expect(configState({ stations: null, mta_api_key: null })).toBe('unconfigured');
-    expect(configState({ stations: null, mta_api_key: 'k' })).toBe('unconfigured');
+  test('unconfigured when stations are missing', () => {
+    expect(configState(null)).toBe('unconfigured');
+    expect(configState(undefined)).toBe('unconfigured');
   });
 
   test('unconfigured when stations is blank', () => {
-    expect(configState({ stations: '  ', mta_api_key: 'k' })).toBe('unconfigured');
-    expect(configState({ stations: '  ' })).toBe('unconfigured');
+    expect(configState('  ')).toBe('unconfigured');
   });
 
-  test('ready from stations alone - the mta api key is optional', () => {
-    expect(configState({ stations: '635,127', mta_api_key: 'k' })).toBe('ready');
-    expect(configState({ stations: '635,127', mta_api_key: null })).toBe('ready');
-    expect(configState({ stations: '635,127', mta_api_key: '' })).toBe('ready');
-    expect(configState({ stations: '635,127' })).toBe('ready');
+  test('ready when stations is non-empty', () => {
+    expect(configState('635,127')).toBe('ready');
   });
 });

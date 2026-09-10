@@ -61,6 +61,8 @@ export interface Arrival {
   direction: Direction;
   arrivalAt: Date;
   tripId: string;
+  /** Configured station this arrival was matched at (platform index key). */
+  stationId: string;
 }
 
 export const POLL_INTERVAL_MS = 30_000;
@@ -160,6 +162,7 @@ export function extractArrivals(
         direction: platform.direction,
         arrivalAt: new Date(ms),
         tripId,
+        stationId: platform.stationId,
       });
       break;
     }
@@ -183,13 +186,6 @@ export function extractArrivals(
   return arrivals.sort((a, b) => a.arrivalAt.getTime() - b.arrivalAt.getTime());
 }
 
-export class ApiKeyError extends Error {
-  constructor() {
-    super('mta rejected the api key - check your api key in the companion settings');
-    this.name = 'ApiKeyError';
-  }
-}
-
 export type FeedHealth = {
   /** When the last successful decode finished, or null before the first success. */
   lastGoodAt: number | null;
@@ -203,35 +199,30 @@ export function isStale(health: FeedHealth, now: number): boolean {
 
 export type PollOutcome =
   | { kind: 'arrivals'; group: FeedGroup; arrivals: Arrival[] }
-  | { kind: 'api-key'; group: FeedGroup }
   | { kind: 'error'; group: FeedGroup };
 
 /** Transport for one feed fetch: returns the raw protobuf body or throws. */
-export type FetchFeed = (url: string, apiKey: string) => Promise<Uint8Array>;
+export type FetchFeed = (url: string) => Promise<Uint8Array>;
 
 export interface PollerState {
   arrivals: Arrival[];
   health: Map<FeedGroup, FeedHealth>;
-  /** True once any feed answered 401/403; the UI points at the settings page. */
-  apiKeyInvalid: boolean;
 }
 
 /**
  * Polls the configured feed groups on a fixed cadence. A group whose previous
  * fetch is still in flight is skipped. Fetch/decode failures keep the previous
- * arrivals and retry on the next tick; a 401/403 surfaces as apiKeyInvalid.
+ * arrivals and retry on the next tick.
  */
 export class FeedPoller {
   private timer: ReturnType<typeof setInterval> | null = null;
   private inFlight = new Set<FeedGroup>();
   private arrivals: Arrival[] = [];
   private healthByGroup = new Map<FeedGroup, FeedHealth>();
-  private apiKeyInvalid = false;
 
   constructor(
     private readonly groups: FeedGroup[],
     private readonly platformIndex: PlatformLookup,
-    private readonly apiKey: string,
     private readonly fetchFeed: FetchFeed,
     private readonly onChange?: (state: PollerState) => void,
   ) {
@@ -243,7 +234,7 @@ export class FeedPoller {
   get state(): PollerState {
     const health = new Map<FeedGroup, FeedHealth>();
     for (const [group, h] of this.healthByGroup) health.set(group, { ...h });
-    return { arrivals: [...this.arrivals], health, apiKeyInvalid: this.apiKeyInvalid };
+    return { arrivals: [...this.arrivals], health };
   }
 
   start(): void {
@@ -267,7 +258,7 @@ export class FeedPoller {
     this.inFlight.add(group);
     const health = this.healthByGroup.get(group)!;
     try {
-      const bytes = await this.fetchFeed(feedUrl(group), this.apiKey);
+      const bytes = await this.fetchFeed(feedUrl(group));
       const feed = decodeFeedMessage(bytes);
       const groupArrivals = extractArrivals(feed, this.platformIndex);
       health.lastGoodAt = Date.now();
@@ -277,9 +268,8 @@ export class FeedPoller {
       return { kind: 'arrivals', group, arrivals: groupArrivals };
     } catch (err) {
       health.lastAttemptAt = Date.now();
-      if (err instanceof ApiKeyError) this.apiKeyInvalid = true;
       this.onChange?.(this.state);
-      return err instanceof ApiKeyError ? { kind: 'api-key', group } : { kind: 'error', group };
+      return { kind: 'error', group };
     } finally {
       this.inFlight.delete(group);
     }

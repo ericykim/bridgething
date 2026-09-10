@@ -11,13 +11,6 @@
         "key": "stations",
         "label": "Station ids (comma-separated; pick stations in companion settings)"
       }
-    },
-    {
-      "type": "string",
-      "data": {
-        "key": "mta_api_key",
-        "label": "MTA API key (optional - feeds work without one)"
-      }
     }
   ],
   "permissions": ["net.fetch"],

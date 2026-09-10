@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import protobuf from 'protobufjs';
 import {
   ARRIVALS_CAP,
-  ApiKeyError,
   FEED_BASE_URL,
   FeedPoller,
   POLL_INTERVAL_MS,
@@ -271,7 +270,7 @@ describe('FeedPoller', () => {
   });
 
   function poller(fetchFeed: FetchFeed, onChange?: (state: PollerState) => void): FeedPoller {
-    return new FeedPoller(['gtfs' as FeedGroup], INDEX, 'key', fetchFeed, onChange);
+    return new FeedPoller(['gtfs' as FeedGroup], INDEX, fetchFeed, onChange);
   }
 
   test('a successful poll records arrivals and health', async () => {
@@ -281,7 +280,6 @@ describe('FeedPoller', () => {
     expect(outcomes[0]!.kind).toBe('arrivals');
     expect(p.state.arrivals).toHaveLength(1);
     expect(p.state.health.get('gtfs')!.lastGoodAt).not.toBeNull();
-    expect(p.state.apiKeyInvalid).toBe(false);
     expect(updates).toHaveLength(1);
   });
 
@@ -300,13 +298,12 @@ describe('FeedPoller', () => {
     expect(p.state.health.get('gtfs')!.lastAttemptAt).toBeGreaterThanOrEqual(p.state.health.get('gtfs')!.lastGoodAt!);
   });
 
-  test('401/403 from the feed surfaces as an api key problem', async () => {
+  test('a thrown sentinel error is treated like any other failure', async () => {
     const p = poller(async () => {
-      throw new ApiKeyError();
+      throw new Error('mta feed returned 500');
     });
     const outcomes = await p.pollAll();
-    expect(outcomes[0]!.kind).toBe('api-key');
-    expect(p.state.apiKeyInvalid).toBe(true);
+    expect(outcomes[0]!.kind).toBe('error');
     expect(p.state.arrivals).toEqual([]);
   });
 

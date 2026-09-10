@@ -9,8 +9,7 @@ export function parseStationIds(raw: string | null | undefined): string[] {
   return [...seen];
 }
 
-/** Config gate: `stations` is required; `mta_api_key` is optional (MTA no longer
- * enforces keys on the realtime feeds, but a provided key is still sent along). */
-export function configState(raw: { stations?: string | null; mta_api_key?: string | null }): 'unconfigured' | 'ready' {
-  return parseStationIds(raw.stations).length > 0 ? 'ready' : 'unconfigured';
+/** Config gate: `stations` must name at least one station. */
+export function configState(stations: string | null | undefined): 'unconfigured' | 'ready' {
+  return parseStationIds(stations).length > 0 ? 'ready' : 'unconfigured';
 }
