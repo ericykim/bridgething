@@ -20,5 +20,6 @@
       }
     }
   ],
-  "permissions": ["net.fetch"]
+  "permissions": ["net.fetch"],
+  "settings": "settings.html"
 }
