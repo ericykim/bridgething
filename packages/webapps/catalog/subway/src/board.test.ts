@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { FOLLOWING_CAP, buildRows, minutesUntil, type BoardRow } from './board.ts';
+import { FOLLOWING_CAP, buildRows, minutesUntil, scrollDeltaForKey, type BoardRow } from './board.ts';
 import type { Arrival } from './feeds.ts';
 import type { TransitAlert } from './alerts.ts';
 
@@ -24,6 +24,26 @@ function arrival(
 ): Arrival {
   return { routeId, headsign, direction, arrivalAt: min(offsetMinutes), tripId: `${routeId}-${offsetMinutes}` };
 }
+
+describe('scrollDeltaForKey', () => {
+  test('ArrowDown steps down by about a viewport', () => {
+    expect(scrollDeltaForKey('ArrowDown', 400)).toBe(320);
+  });
+
+  test('ArrowUp steps up by the same magnitude', () => {
+    expect(scrollDeltaForKey('ArrowUp', 400)).toBe(-320);
+  });
+
+  test('small viewports still step', () => {
+    expect(scrollDeltaForKey('ArrowDown', 10)).toBe(8);
+  });
+
+  test('non-wheel keys produce no delta', () => {
+    expect(scrollDeltaForKey('Enter', 400)).toBeNull();
+    expect(scrollDeltaForKey('PageDown', 400)).toBeNull();
+    expect(scrollDeltaForKey('a', 400)).toBeNull();
+  });
+});
 
 describe('minutesUntil', () => {
   test('rounds up to the next whole minute', () => {

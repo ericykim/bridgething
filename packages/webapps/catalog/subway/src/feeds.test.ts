@@ -5,6 +5,7 @@ import {
   ApiKeyError,
   FEED_BASE_URL,
   FeedPoller,
+  POLL_INTERVAL_MS,
   STALE_AFTER_MS,
   buildPlatformIndex,
   decodeFeedMessage,
@@ -248,6 +249,10 @@ describe('staleness', () => {
     expect(isStale(fresh, 1000 + STALE_AFTER_MS)).toBe(false);
     expect(isStale(fresh, 1000 + STALE_AFTER_MS + 1)).toBe(true);
     expect(isStale({ lastGoodAt: null, lastAttemptAt: 1000 }, 0)).toBe(true);
+  });
+
+  test('the stale window scales with the poll cadence (3x), so a cadence flip drags it along', () => {
+    expect(STALE_AFTER_MS).toBe(3 * POLL_INTERVAL_MS);
   });
 });
 

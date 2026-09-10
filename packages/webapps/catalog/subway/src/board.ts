@@ -35,6 +35,17 @@ export function minutesUntil(arrivalAt: Date, now: number | Date): number {
 }
 
 /**
+ * Wheel-rotation fallback (parent-spec plan): some webviews emit rotation as
+ * arrow-key keydowns instead of native scroll. Maps ArrowDown/ArrowUp to a
+ * scroll delta of about one viewport of rows; null for any other key.
+ */
+export function scrollDeltaForKey(key: string, viewportHeight: number): number | null {
+  if (key === 'ArrowDown') return Math.round(viewportHeight * 0.8);
+  if (key === 'ArrowUp') return -Math.round(viewportHeight * 0.8);
+  return null;
+}
+
+/**
  * Rows for the board, one per line, in the shown direction: next train +
  * capped following trains per route, rows sorted by soonest arrival across
  * all lines. Lines with no upcoming trains in the shown direction are
