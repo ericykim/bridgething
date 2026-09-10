@@ -243,7 +243,7 @@ function Board({
       <header className="mb-3 border-b border-rule px-3 pt-3 pb-3">
         <div className="font-mono text-eyebrow text-dim font-semibold uppercase w-full flex items-baseline justify-between gap-3">
         <div className="text-white">{direction === 'N' ? 'inbound' : 'outbound'}</div>
-          {true && <span className="text-warn">⚠ offline</span>}
+          {stale && <span className="text-warn">⚠ offline</span>}
         </div>
       </header>
       <main ref={scrollerRef} className="flex-1 overflow-y-auto px-4 pb-6">
@@ -399,7 +399,7 @@ function AlertCarousel({
       <div ref={clipRef} className="min-w-0 flex-1 overflow-hidden">
         <span
           ref={textRef}
-          className="inline-block whitespace-nowrap font-semibold text-hint text-warn will-change-transform"
+          className="inline-block whitespace-nowrap  text-hint text-warn will-change-transform"
         >
           {text}
         </span>
