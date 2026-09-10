@@ -64,8 +64,10 @@ export interface Arrival {
 }
 
 export const POLL_INTERVAL_MS = 30_000;
-/** Three times the poll cadence; a feed older than this renders as stale. */
-export const STALE_AFTER_MS = 90_000;
+/** Three missed polls without a good one renders the board stale; derives from
+ * the cadence so a cadence flip (e.g. 30 s to 60 s for BT contention) drags the
+ * staleness window along instead of pinning the board as permanently old. */
+export const STALE_AFTER_MS = 3 * POLL_INTERVAL_MS;
 /** Max arrivals kept per route and direction (chips row plus buffer). */
 export const ARRIVALS_CAP = 8;
 
