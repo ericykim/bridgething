@@ -17,7 +17,7 @@ import { getStationById, type Direction } from './static-data';
 type Phase =
   | { kind: 'loading' }
   | { kind: 'unconfigured' }
-  | { kind: 'ready'; stationIds: string[]; apiKey: string }
+  | { kind: 'ready'; stationIds: string[]; apiKey: string | null }
   | { kind: 'error'; message: string };
 
 export default function App() {
@@ -37,13 +37,13 @@ export default function App() {
         if (cancelled) return;
 
         const stations = stationsCfg.ok ? stationsCfg.response.value : null;
-        const apiKey = keyCfg.ok ? keyCfg.response.value : null;
+        const apiKey = keyCfg.ok && keyCfg.response.value?.trim() ? keyCfg.response.value.trim() : null;
         const state = configState({ stations, mta_api_key: apiKey });
         if (state === 'unconfigured') {
           setPhase({ kind: 'unconfigured' });
           return;
         }
-        setPhase({ kind: 'ready', stationIds: parseStationIds(stations), apiKey: apiKey!.trim() });
+        setPhase({ kind: 'ready', stationIds: parseStationIds(stations), apiKey });
       } catch (err) {
         if (!cancelled) setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
       }
@@ -62,7 +62,7 @@ export default function App() {
       {phase.kind === 'loading' && <Centered>loading subway...</Centered>}
       {phase.kind === 'unconfigured' && (
         <Centered>
-          no stations yet - set stations and your mta api key in the companion app settings.
+          no stations yet - set stations in the companion app settings (an mta api key is optional).
         </Centered>
       )}
       {phase.kind === 'error' && <Centered tone="muted">{phase.message}</Centered>}
@@ -98,7 +98,7 @@ function Board({
 }: {
   client: BridgethingClient;
   stationIds: string[];
-  apiKey: string;
+  apiKey: string | null;
 }) {
   const [direction, setDirection] = useState<Direction>('N');
   const [pollerState, setPollerState] = useState<PollerState>({
@@ -125,11 +125,14 @@ function Board({
     };
 
     const fetchFeed: FetchFeed = async (url, key) => {
+      // The MTA realtime feeds no longer require a key; one is only sent when
+      // the user has set one (header name must be lowercase per MTA docs).
+      const headers = key ? [{ name: 'x-api-key', value: key }] : [];
       const res = await client.net.fetch({
         request: {
           url,
           method: 'GET',
-          headers: [{ name: 'x-api-key', value: key }],
+          headers,
           body: null,
           timeoutMs: 12_000,
           redirect: 'follow',
@@ -145,7 +148,7 @@ function Board({
       return new Uint8Array(res.response.response.body);
     };
 
-    const poller = new FeedPoller(groups, platformIndex, apiKey, fetchFeed, onChange);
+    const poller = new FeedPoller(groups, platformIndex, apiKey ?? '', fetchFeed, onChange);
     setPollerState(poller.state); // drop arrivals from a previous line set
     poller.start();
     return () => {
