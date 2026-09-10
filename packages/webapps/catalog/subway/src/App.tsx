@@ -1,8 +1,8 @@
 import { BridgethingClient } from '@bridgething/client';
 import { daemonUrl } from '@bridgething/webapp-shared/daemon';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertPoller, activeAlerts, matchAlerts, type AlertState } from './alerts';
-import { buildRows, minutesUntil } from './board';
+import { buildRows, minutesUntil, scrollDeltaForKey } from './board';
 import { configState, parseStationIds } from './config';
 import {
   ApiKeyError,
@@ -87,8 +87,9 @@ function useNow(intervalMs: number): number {
 /**
  * The arrivals board: one row per line for the shown direction, ordered by
  * soonest arrival. Wheel rotation scrolls natively (overflow-y, clamps at the
- * ends); wheel press arrives as an Enter keydown and flips the direction for
- * every row. Countdowns tick every second; data refreshes on the poller's
+ * ends); if a webview instead emits rotation as arrow keys, they map to a
+ * scroll step of about one viewport. Wheel press arrives as an Enter keydown
+ * and flips the direction for every row. Countdowns tick every second; data refreshes on the poller's
  * 30 s cadence. Alerts poll on the slower AlertPoller cadence: rows with an
  * active alert on their line carry an indicator + text; alerts with no row to
  * sit on surface in a screen-level banner. Stale feeds keep the last known
@@ -111,6 +112,7 @@ function Board({
   });
   const [alertState, setAlertState] = useState<AlertState>({ alerts: [], lastGoodAt: null });
   const now = useNow(1_000);
+  const scrollerRef = useRef<HTMLElement | null>(null);
 
   const platformIndex = useMemo(() => buildPlatformIndex(stationIds), [stationIds]);
   const groups = useMemo(
@@ -177,8 +179,21 @@ function Board({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.key !== 'Enter') return;
-      setDirection((d) => (d === 'N' ? 'S' : 'N'));
+      if (e.repeat) return;
+      if (e.key === 'Enter') {
+        setDirection((d) => (d === 'N' ? 'S' : 'N'));
+        return;
+      }
+      // Wheel-rotation fallback: rotation may arrive as arrow keys instead of
+      // native scroll; step the board scroller (native scroll path ignores
+      // these keys, so the fallback only fires when rotation needs it).
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const delta = scrollDeltaForKey(e.key, scroller.clientHeight);
+      if (delta !== null) {
+        e.preventDefault();
+        scroller.scrollBy({ top: delta });
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -222,7 +237,7 @@ function Board({
           {direction === 'N' ? 'inbound' : 'outbound'}
         </div>
       </header>
-      <main className="flex-1 overflow-y-auto px-8 pb-6">
+      <main ref={scrollerRef} className="flex-1 overflow-y-auto px-8 pb-6">
         {bannerAlerts.length > 0 && (
           <div className="mb-2 flex items-center gap-2 rounded border border-warn/40 bg-warn/10 px-3 py-2">
             <span className="shrink-0 font-mono font-bold text-warn">!</span>
