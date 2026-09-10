@@ -1,6 +1,7 @@
 import { settings, type SettingsContext } from '@bridgething/client/settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { parseStationIds } from '../src/config';
 import { getRoute, getStationById, type StaticStation } from '../src/static-data.ts';
 import { searchStations, serializeStations } from './picker';
 import './style.css';
@@ -33,8 +34,7 @@ function Settings() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
 
-  // The last value we wrote or loaded, so a docChanged echo of our own write
-  // does not clobber in-progress edits to the api key field.
+  // The last value we wrote or loaded, so the Save button can skip no-op writes.
   const savedApiKey = useRef('');
 
   useEffect(() => {
@@ -43,41 +43,15 @@ function Settings() {
         setCtx(await settings.context());
         const entries = await settings.config.list();
         const byKey = Object.fromEntries(entries.map(e => [e.key, e.value]));
-        setSelected(
-          new Set(
-            (byKey[STATIONS_KEY] ?? '')
-              .split(',')
-              .map(s => s.trim())
-              .filter(Boolean),
-          ),
-        );
+        const stations = new Set(parseStationIds(byKey[STATIONS_KEY]));
+        setSelected(stations);
         savedApiKey.current = byKey[API_KEY_FIELD] ?? '';
         setApiKey(savedApiKey.current);
-        setStatus(`${selected.size ? '' : 'pick at least one station. '}${selected.size} selected`);
+        setStatus(`${stations.size ? '' : 'pick at least one station. '}${stations.size} selected`);
       } catch (err) {
         setStatus(errText(err));
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    return settings.onDocChanged((key, value) => {
-      if (key === STATIONS_KEY) {
-        setSelected(
-          new Set(
-            (value ?? '')
-              .split(',')
-              .map(s => s.trim())
-              .filter(Boolean),
-          ),
-        );
-      } else if (key === API_KEY_FIELD && (value ?? '') !== apiKey) {
-        savedApiKey.current = value ?? '';
-        setApiKey(value ?? '');
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function saveStations(next: Set<string>) {
