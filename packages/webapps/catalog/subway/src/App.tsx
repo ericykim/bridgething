@@ -1,6 +1,7 @@
 import { BridgethingClient } from '@bridgething/client';
 import { daemonUrl } from '@bridgething/webapp-shared/daemon';
 import { useEffect, useMemo, useState } from 'react';
+import { AlertPoller, activeAlerts, matchAlerts, type AlertState } from './alerts';
 import { buildRows, minutesUntil } from './board';
 import { configState, parseStationIds } from './config';
 import {
@@ -88,8 +89,10 @@ function useNow(intervalMs: number): number {
  * soonest arrival. Wheel rotation scrolls natively (overflow-y, clamps at the
  * ends); wheel press arrives as an Enter keydown and flips the direction for
  * every row. Countdowns tick every second; data refreshes on the poller's
- * 30 s cadence. Stale feeds keep the last known times, dimmed with an "old"
- * marker (visuals finalized in phase 5).
+ * 30 s cadence. Alerts poll on the slower AlertPoller cadence: rows with an
+ * active alert on their line carry an indicator + text; alerts with no row to
+ * sit on surface in a screen-level banner. Stale feeds keep the last known
+ * times, dimmed with an "old" marker, and recover automatically on reconnect.
  */
 function Board({
   client,
@@ -106,6 +109,7 @@ function Board({
     health: new Map(),
     apiKeyInvalid: false,
   });
+  const [alertState, setAlertState] = useState<AlertState>({ alerts: [], lastGoodAt: null });
   const now = useNow(1_000);
 
   const platformIndex = useMemo(() => buildPlatformIndex(stationIds), [stationIds]);
@@ -113,15 +117,25 @@ function Board({
     () => feedGroupsForRoutes(stationIds.flatMap((id) => getStationById(id)?.routes ?? [])),
     [stationIds],
   );
+  // Alerts are re-matched against the 1 s tick so an active_period window
+  // expiring drops its indicator between alert polls (cheap: a few alerts × a
+  // few stations per tick). React identity churn here is deliberate.
+  const matched = useMemo(
+    () => matchAlerts(activeAlerts(alertState.alerts, now), stationIds),
+    [alertState.alerts, now, stationIds],
+  );
 
   useEffect(() => {
-    // The poller keeps fetching until stopped; if this effect re-runs (station
-    // set or key changed) an in-flight poll from the previous instance could
-    // still resolve and clobber the new poller's fresh state. Gate onChange on
+    // The pollers keep fetching until stopped; if this effect re-runs (station
+    // set or key changed) an in-flight poll from a previous instance could
+    // still resolve and clobber the new pollers' fresh state. Gate onChange on
     // cancellation so stale-line-set data never reaches React.
     let cancelled = false;
     const onChange = (state: PollerState) => {
       if (!cancelled) setPollerState(state);
+    };
+    const onAlerts = (state: AlertState) => {
+      if (!cancelled) setAlertState(state);
     };
 
     const fetchFeed: FetchFeed = async (url, key) => {
@@ -149,11 +163,15 @@ function Board({
     };
 
     const poller = new FeedPoller(groups, platformIndex, apiKey ?? '', fetchFeed, onChange);
+    const alertPoller = new AlertPoller(apiKey ?? '', fetchFeed, onAlerts);
     setPollerState(poller.state); // drop arrivals from a previous line set
+    setAlertState(alertPoller.state);
     poller.start();
+    alertPoller.start();
     return () => {
       cancelled = true;
       poller.stop();
+      alertPoller.stop();
     };
   }, [client, groups, platformIndex, apiKey]);
 
@@ -167,9 +185,24 @@ function Board({
   }, []);
 
   const rows = useMemo(
-    () => buildRows(pollerState.arrivals, direction),
-    [pollerState.arrivals, direction],
+    () => buildRows(pollerState.arrivals, direction, matched.byRoute),
+    [pollerState.arrivals, direction, matched],
   );
+
+  // Alerts with no row to sit on: none matched a configured line at all, or the
+  // line is currently rowless (no trains) — both surface as a screen-level banner.
+  const bannerAlerts = useMemo(() => {
+    const rowRouteIds = new Set(rows.map((r) => r.routeId));
+    const rowless = [...matched.byRoute.entries()]
+      .filter(([routeId]) => !rowRouteIds.has(routeId))
+      .flatMap(([, alerts]) => alerts);
+    const seen = new Set<string>();
+    return [...matched.screenLevel, ...rowless].filter((a) => {
+      if (seen.has(a.id)) return false;
+      seen.add(a.id);
+      return true;
+    });
+  }, [rows, matched]);
 
   // Stale hook for phase 5: every feed group past the staleness window dims the
   // board. Rows only exist once data has arrived, so first-load never shows it.
@@ -190,6 +223,14 @@ function Board({
         </div>
       </header>
       <main className="flex-1 overflow-y-auto px-8 pb-6">
+        {bannerAlerts.length > 0 && (
+          <div className="mb-2 flex items-center gap-2 rounded border border-warn/40 bg-warn/10 px-3 py-2">
+            <span className="shrink-0 font-mono font-bold text-warn">!</span>
+            <span className="min-w-0 flex-1 truncate font-mono text-hint text-warn" title={bannerAlerts.map((a) => a.headerText ?? a.id).join(' - ')}>
+              {bannerAlerts.map((a) => a.headerText ?? a.id).join(' - ')}
+            </span>
+          </div>
+        )}
         {rows.length === 0 ? (
           <Centered tone="muted">
             {hadData
@@ -226,6 +267,10 @@ function BoardRowView({
   const bulletStyle = row.color ? { backgroundColor: `#${row.color}` } : undefined;
   const bulletText =
     row.textColor != null ? { color: `#${row.textColor}` } : undefined;
+  // first active alert's text is what the row surfaces; the rest ride along in the tooltip
+  const alert = row.alerts[0];
+  const alertText = alert ? (alert.headerText ?? alert.descriptionText ?? alert.id) : null;
+  const alertTitle = row.alerts.map((a) => a.headerText ?? a.descriptionText ?? a.id).join(' - ');
 
   return (
     <div
@@ -239,7 +284,17 @@ function BoardRowView({
       >
         <span style={bulletText}>{row.routeId}</span>
       </span>
-      <div className="min-w-0 flex-1 truncate font-mono text-row text-near">{row.headsign}</div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-mono text-row text-near">{row.headsign}</div>
+        {alertText && (
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className="shrink-0 font-mono text-hint font-bold text-warn">!</span>
+            <span className="truncate font-mono text-hint text-warn" title={alertTitle}>
+              {alertText}
+            </span>
+          </div>
+        )}
+      </div>
       <div className="flex shrink-0 items-center gap-1">
         {row.following.map((a) => {
           const m = minutesUntil(a.arrivalAt, now);

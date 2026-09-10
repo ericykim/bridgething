@@ -7,6 +7,7 @@
 
 import { getRoute, type Direction } from './static-data';
 import type { Arrival } from './feeds';
+import type { TransitAlert } from './alerts.ts';
 
 /** Max following-train chips rendered on a row (~4-5 fit the row height). */
 export const FOLLOWING_CAP = 5;
@@ -23,6 +24,8 @@ export type BoardRow = {
   next: Arrival;
   /** Following trains on this line for the shown direction, soonest first, capped at FOLLOWING_CAP. */
   following: Arrival[];
+  /** Active service alerts for this line (indicator + text on the row), empty when none. */
+  alerts: TransitAlert[];
 };
 
 /** Whole minutes until the train arrives, rounded up, clamped at zero. */
@@ -37,7 +40,11 @@ export function minutesUntil(arrivalAt: Date, now: number | Date): number {
  * all lines. Lines with no upcoming trains in the shown direction are
  * dropped (including lines with no service today).
  */
-export function buildRows(arrivals: Arrival[], direction: Direction): BoardRow[] {
+export function buildRows(
+  arrivals: Arrival[],
+  direction: Direction,
+  alertsByRoute: ReadonlyMap<string, TransitAlert[]> = new Map(),
+): BoardRow[] {
   const byRoute = new Map<string, Arrival[]>();
   for (const a of arrivals) {
     if (a.direction !== direction) continue;
@@ -59,6 +66,7 @@ export function buildRows(arrivals: Arrival[], direction: Direction): BoardRow[]
       headsign: next.headsign,
       next,
       following: rest.slice(0, FOLLOWING_CAP),
+      alerts: alertsByRoute.get(routeId) ?? [],
     });
   }
   return rows.sort((a, b) => a.next.arrivalAt.getTime() - b.next.arrivalAt.getTime());
