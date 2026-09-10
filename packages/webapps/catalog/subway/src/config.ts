@@ -9,9 +9,8 @@ export function parseStationIds(raw: string | null | undefined): string[] {
   return [...seen];
 }
 
-/** Phase-1 gate: both config keys must be present before the app does anything. */
+/** Config gate: `stations` is required; `mta_api_key` is optional (MTA no longer
+ * enforces keys on the realtime feeds, but a provided key is still sent along). */
 export function configState(raw: { stations?: string | null; mta_api_key?: string | null }): 'unconfigured' | 'ready' {
-  const hasStations = parseStationIds(raw.stations).length > 0;
-  const hasKey = !!raw.mta_api_key && raw.mta_api_key.trim().length > 0;
-  return hasStations && hasKey ? 'ready' : 'unconfigured';
+  return parseStationIds(raw.stations).length > 0 ? 'ready' : 'unconfigured';
 }
