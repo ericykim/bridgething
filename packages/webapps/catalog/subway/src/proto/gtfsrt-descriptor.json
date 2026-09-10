@@ -1,0 +1,1384 @@
+{
+  "options": {
+    "java_package": "com.google.transit.realtime"
+  },
+  "nested": {
+    "transit_realtime": {
+      "nested": {
+        "FeedMessage": {
+          "edition": "proto2",
+          "fields": {
+            "header": {
+              "rule": "required",
+              "type": "FeedHeader",
+              "id": 1
+            },
+            "entity": {
+              "rule": "repeated",
+              "type": "FeedEntity",
+              "id": 2
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ]
+        },
+        "FeedHeader": {
+          "edition": "proto2",
+          "fields": {
+            "gtfsRealtimeVersion": {
+              "rule": "required",
+              "type": "string",
+              "id": 1,
+              "protoName": "gtfs_realtime_version"
+            },
+            "incrementality": {
+              "type": "Incrementality",
+              "id": 2,
+              "options": {
+                "default": "FULL_DATASET"
+              }
+            },
+            "timestamp": {
+              "type": "uint64",
+              "id": 3
+            },
+            "feedVersion": {
+              "type": "string",
+              "id": 4,
+              "protoName": "feed_version"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "Incrementality": {
+              "values": {
+                "FULL_DATASET": 0,
+                "DIFFERENTIAL": 1
+              }
+            }
+          }
+        },
+        "FeedEntity": {
+          "edition": "proto2",
+          "fields": {
+            "id": {
+              "rule": "required",
+              "type": "string",
+              "id": 1
+            },
+            "isDeleted": {
+              "type": "bool",
+              "id": 2,
+              "protoName": "is_deleted",
+              "options": {
+                "default": false
+              }
+            },
+            "tripUpdate": {
+              "type": "TripUpdate",
+              "id": 3,
+              "protoName": "trip_update"
+            },
+            "vehicle": {
+              "type": "VehiclePosition",
+              "id": 4
+            },
+            "alert": {
+              "type": "Alert",
+              "id": 5
+            },
+            "shape": {
+              "type": "Shape",
+              "id": 6
+            },
+            "stop": {
+              "type": "Stop",
+              "id": 7
+            },
+            "tripModifications": {
+              "type": "TripModifications",
+              "id": 8,
+              "protoName": "trip_modifications"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ]
+        },
+        "TripUpdate": {
+          "edition": "proto2",
+          "fields": {
+            "trip": {
+              "rule": "required",
+              "type": "TripDescriptor",
+              "id": 1
+            },
+            "vehicle": {
+              "type": "VehicleDescriptor",
+              "id": 3
+            },
+            "stopTimeUpdate": {
+              "rule": "repeated",
+              "type": "StopTimeUpdate",
+              "id": 2,
+              "protoName": "stop_time_update"
+            },
+            "timestamp": {
+              "type": "uint64",
+              "id": 4
+            },
+            "delay": {
+              "type": "int32",
+              "id": 5
+            },
+            "tripProperties": {
+              "type": "TripProperties",
+              "id": 6,
+              "protoName": "trip_properties"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "StopTimeEvent": {
+              "fields": {
+                "delay": {
+                  "type": "int32",
+                  "id": 1
+                },
+                "time": {
+                  "type": "int64",
+                  "id": 2
+                },
+                "uncertainty": {
+                  "type": "int32",
+                  "id": 3
+                },
+                "scheduledTime": {
+                  "type": "int64",
+                  "id": 4,
+                  "protoName": "scheduled_time"
+                }
+              },
+              "extensions": [
+                [
+                  1000,
+                  1999
+                ],
+                [
+                  9000,
+                  9999
+                ]
+              ]
+            },
+            "StopTimeUpdate": {
+              "fields": {
+                "stopSequence": {
+                  "type": "uint32",
+                  "id": 1,
+                  "protoName": "stop_sequence"
+                },
+                "stopId": {
+                  "type": "string",
+                  "id": 4,
+                  "protoName": "stop_id"
+                },
+                "arrival": {
+                  "type": "StopTimeEvent",
+                  "id": 2
+                },
+                "departure": {
+                  "type": "StopTimeEvent",
+                  "id": 3
+                },
+                "departureOccupancyStatus": {
+                  "type": "VehiclePosition.OccupancyStatus",
+                  "id": 7,
+                  "protoName": "departure_occupancy_status"
+                },
+                "scheduleRelationship": {
+                  "type": "ScheduleRelationship",
+                  "id": 5,
+                  "protoName": "schedule_relationship",
+                  "options": {
+                    "default": "SCHEDULED"
+                  }
+                },
+                "stopTimeProperties": {
+                  "type": "StopTimeProperties",
+                  "id": 6,
+                  "protoName": "stop_time_properties"
+                }
+              },
+              "extensions": [
+                [
+                  1000,
+                  1999
+                ],
+                [
+                  9000,
+                  9999
+                ]
+              ],
+              "nested": {
+                "ScheduleRelationship": {
+                  "values": {
+                    "SCHEDULED": 0,
+                    "SKIPPED": 1,
+                    "NO_DATA": 2,
+                    "UNSCHEDULED": 3
+                  }
+                },
+                "StopTimeProperties": {
+                  "fields": {
+                    "assignedStopId": {
+                      "type": "string",
+                      "id": 1,
+                      "protoName": "assigned_stop_id"
+                    },
+                    "stopHeadsign": {
+                      "type": "string",
+                      "id": 2,
+                      "protoName": "stop_headsign"
+                    },
+                    "pickupType": {
+                      "type": "DropOffPickupType",
+                      "id": 3,
+                      "protoName": "pickup_type"
+                    },
+                    "dropOffType": {
+                      "type": "DropOffPickupType",
+                      "id": 4,
+                      "protoName": "drop_off_type"
+                    }
+                  },
+                  "extensions": [
+                    [
+                      1000,
+                      1999
+                    ],
+                    [
+                      9000,
+                      9999
+                    ]
+                  ],
+                  "nested": {
+                    "DropOffPickupType": {
+                      "values": {
+                        "REGULAR": 0,
+                        "NONE": 1,
+                        "PHONE_AGENCY": 2,
+                        "COORDINATE_WITH_DRIVER": 3
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "TripProperties": {
+              "fields": {
+                "tripId": {
+                  "type": "string",
+                  "id": 1,
+                  "protoName": "trip_id"
+                },
+                "startDate": {
+                  "type": "string",
+                  "id": 2,
+                  "protoName": "start_date"
+                },
+                "startTime": {
+                  "type": "string",
+                  "id": 3,
+                  "protoName": "start_time"
+                },
+                "shapeId": {
+                  "type": "string",
+                  "id": 4,
+                  "protoName": "shape_id"
+                },
+                "tripHeadsign": {
+                  "type": "string",
+                  "id": 5,
+                  "protoName": "trip_headsign"
+                },
+                "tripShortName": {
+                  "type": "string",
+                  "id": 6,
+                  "protoName": "trip_short_name"
+                }
+              },
+              "extensions": [
+                [
+                  1000,
+                  1999
+                ],
+                [
+                  9000,
+                  9999
+                ]
+              ]
+            }
+          }
+        },
+        "VehiclePosition": {
+          "edition": "proto2",
+          "fields": {
+            "trip": {
+              "type": "TripDescriptor",
+              "id": 1
+            },
+            "vehicle": {
+              "type": "VehicleDescriptor",
+              "id": 8
+            },
+            "position": {
+              "type": "Position",
+              "id": 2
+            },
+            "currentStopSequence": {
+              "type": "uint32",
+              "id": 3,
+              "protoName": "current_stop_sequence"
+            },
+            "stopId": {
+              "type": "string",
+              "id": 7,
+              "protoName": "stop_id"
+            },
+            "currentStatus": {
+              "type": "VehicleStopStatus",
+              "id": 4,
+              "protoName": "current_status",
+              "options": {
+                "default": "IN_TRANSIT_TO"
+              }
+            },
+            "timestamp": {
+              "type": "uint64",
+              "id": 5
+            },
+            "congestionLevel": {
+              "type": "CongestionLevel",
+              "id": 6,
+              "protoName": "congestion_level"
+            },
+            "occupancyStatus": {
+              "type": "OccupancyStatus",
+              "id": 9,
+              "protoName": "occupancy_status"
+            },
+            "occupancyPercentage": {
+              "type": "uint32",
+              "id": 10,
+              "protoName": "occupancy_percentage"
+            },
+            "multiCarriageDetails": {
+              "rule": "repeated",
+              "type": "CarriageDetails",
+              "id": 11,
+              "protoName": "multi_carriage_details"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "VehicleStopStatus": {
+              "values": {
+                "INCOMING_AT": 0,
+                "STOPPED_AT": 1,
+                "IN_TRANSIT_TO": 2
+              }
+            },
+            "CongestionLevel": {
+              "values": {
+                "UNKNOWN_CONGESTION_LEVEL": 0,
+                "RUNNING_SMOOTHLY": 1,
+                "STOP_AND_GO": 2,
+                "CONGESTION": 3,
+                "SEVERE_CONGESTION": 4
+              }
+            },
+            "OccupancyStatus": {
+              "values": {
+                "EMPTY": 0,
+                "MANY_SEATS_AVAILABLE": 1,
+                "FEW_SEATS_AVAILABLE": 2,
+                "STANDING_ROOM_ONLY": 3,
+                "CRUSHED_STANDING_ROOM_ONLY": 4,
+                "FULL": 5,
+                "NOT_ACCEPTING_PASSENGERS": 6,
+                "NO_DATA_AVAILABLE": 7,
+                "NOT_BOARDABLE": 8
+              }
+            },
+            "CarriageDetails": {
+              "fields": {
+                "id": {
+                  "type": "string",
+                  "id": 1
+                },
+                "label": {
+                  "type": "string",
+                  "id": 2
+                },
+                "occupancyStatus": {
+                  "type": "OccupancyStatus",
+                  "id": 3,
+                  "protoName": "occupancy_status",
+                  "options": {
+                    "default": "NO_DATA_AVAILABLE"
+                  }
+                },
+                "occupancyPercentage": {
+                  "type": "int32",
+                  "id": 4,
+                  "protoName": "occupancy_percentage",
+                  "options": {
+                    "default": -1
+                  }
+                },
+                "carriageSequence": {
+                  "type": "uint32",
+                  "id": 5,
+                  "protoName": "carriage_sequence"
+                }
+              },
+              "extensions": [
+                [
+                  1000,
+                  1999
+                ],
+                [
+                  9000,
+                  9999
+                ]
+              ]
+            }
+          }
+        },
+        "Alert": {
+          "edition": "proto2",
+          "fields": {
+            "activePeriod": {
+              "rule": "repeated",
+              "type": "TimeRange",
+              "id": 1,
+              "protoName": "active_period",
+              "options": {
+                "deprecated": true
+              }
+            },
+            "communicationPeriod": {
+              "rule": "repeated",
+              "type": "TimeRange",
+              "id": 2,
+              "protoName": "communication_period"
+            },
+            "impactPeriod": {
+              "rule": "repeated",
+              "type": "TimeRange",
+              "id": 3,
+              "protoName": "impact_period"
+            },
+            "informedEntity": {
+              "rule": "repeated",
+              "type": "EntitySelector",
+              "id": 5,
+              "protoName": "informed_entity"
+            },
+            "cause": {
+              "type": "Cause",
+              "id": 6,
+              "options": {
+                "default": "UNKNOWN_CAUSE"
+              }
+            },
+            "effect": {
+              "type": "Effect",
+              "id": 7,
+              "options": {
+                "default": "UNKNOWN_EFFECT"
+              }
+            },
+            "url": {
+              "type": "TranslatedString",
+              "id": 8
+            },
+            "headerText": {
+              "type": "TranslatedString",
+              "id": 10,
+              "protoName": "header_text"
+            },
+            "descriptionText": {
+              "type": "TranslatedString",
+              "id": 11,
+              "protoName": "description_text"
+            },
+            "ttsHeaderText": {
+              "type": "TranslatedString",
+              "id": 12,
+              "protoName": "tts_header_text"
+            },
+            "ttsDescriptionText": {
+              "type": "TranslatedString",
+              "id": 13,
+              "protoName": "tts_description_text"
+            },
+            "severityLevel": {
+              "type": "SeverityLevel",
+              "id": 14,
+              "protoName": "severity_level",
+              "options": {
+                "default": "UNKNOWN_SEVERITY"
+              }
+            },
+            "image": {
+              "type": "TranslatedImage",
+              "id": 15
+            },
+            "imageAlternativeText": {
+              "type": "TranslatedString",
+              "id": 16,
+              "protoName": "image_alternative_text"
+            },
+            "causeDetail": {
+              "type": "TranslatedString",
+              "id": 17,
+              "protoName": "cause_detail"
+            },
+            "effectDetail": {
+              "type": "TranslatedString",
+              "id": 18,
+              "protoName": "effect_detail"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "Cause": {
+              "values": {
+                "UNKNOWN_CAUSE": 1,
+                "OTHER_CAUSE": 2,
+                "TECHNICAL_PROBLEM": 3,
+                "STRIKE": 4,
+                "DEMONSTRATION": 5,
+                "ACCIDENT": 6,
+                "HOLIDAY": 7,
+                "WEATHER": 8,
+                "MAINTENANCE": 9,
+                "CONSTRUCTION": 10,
+                "POLICE_ACTIVITY": 11,
+                "MEDICAL_EMERGENCY": 12,
+                "SPECIAL_EVENT": 13
+              }
+            },
+            "Effect": {
+              "values": {
+                "NO_SERVICE": 1,
+                "REDUCED_SERVICE": 2,
+                "SIGNIFICANT_DELAYS": 3,
+                "DETOUR": 4,
+                "ADDITIONAL_SERVICE": 5,
+                "MODIFIED_SERVICE": 6,
+                "OTHER_EFFECT": 7,
+                "UNKNOWN_EFFECT": 8,
+                "STOP_MOVED": 9,
+                "NO_EFFECT": 10,
+                "ACCESSIBILITY_ISSUE": 11
+              }
+            },
+            "SeverityLevel": {
+              "values": {
+                "UNKNOWN_SEVERITY": 1,
+                "INFO": 2,
+                "WARNING": 3,
+                "SEVERE": 4
+              }
+            }
+          }
+        },
+        "TimeRange": {
+          "edition": "proto2",
+          "fields": {
+            "start": {
+              "type": "uint64",
+              "id": 1
+            },
+            "end": {
+              "type": "uint64",
+              "id": 2
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ]
+        },
+        "Position": {
+          "edition": "proto2",
+          "fields": {
+            "latitude": {
+              "rule": "required",
+              "type": "float",
+              "id": 1
+            },
+            "longitude": {
+              "rule": "required",
+              "type": "float",
+              "id": 2
+            },
+            "bearing": {
+              "type": "float",
+              "id": 3
+            },
+            "odometer": {
+              "type": "double",
+              "id": 4
+            },
+            "speed": {
+              "type": "float",
+              "id": 5
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ]
+        },
+        "TripDescriptor": {
+          "edition": "proto2",
+          "fields": {
+            "tripId": {
+              "type": "string",
+              "id": 1,
+              "protoName": "trip_id"
+            },
+            "routeId": {
+              "type": "string",
+              "id": 5,
+              "protoName": "route_id"
+            },
+            "directionId": {
+              "type": "uint32",
+              "id": 6,
+              "protoName": "direction_id"
+            },
+            "startTime": {
+              "type": "string",
+              "id": 2,
+              "protoName": "start_time"
+            },
+            "startDate": {
+              "type": "string",
+              "id": 3,
+              "protoName": "start_date"
+            },
+            "scheduleRelationship": {
+              "type": "ScheduleRelationship",
+              "id": 4,
+              "protoName": "schedule_relationship"
+            },
+            "modifiedTrip": {
+              "type": "ModifiedTripSelector",
+              "id": 7,
+              "protoName": "modified_trip"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "ScheduleRelationship": {
+              "valuesOptions": {
+                "ADDED": {
+                  "deprecated": true
+                }
+              },
+              "values": {
+                "SCHEDULED": 0,
+                "ADDED": 1,
+                "UNSCHEDULED": 2,
+                "CANCELED": 3,
+                "REPLACEMENT": 5,
+                "DUPLICATED": 6,
+                "DELETED": 7,
+                "NEW": 8
+              }
+            },
+            "ModifiedTripSelector": {
+              "fields": {
+                "modificationsId": {
+                  "type": "string",
+                  "id": 1,
+                  "protoName": "modifications_id"
+                },
+                "affectedTripId": {
+                  "type": "string",
+                  "id": 2,
+                  "protoName": "affected_trip_id"
+                },
+                "startTime": {
+                  "type": "string",
+                  "id": 3,
+                  "protoName": "start_time"
+                },
+                "startDate": {
+                  "type": "string",
+                  "id": 4,
+                  "protoName": "start_date"
+                }
+              },
+              "extensions": [
+                [
+                  1000,
+                  1999
+                ],
+                [
+                  9000,
+                  9999
+                ]
+              ]
+            }
+          }
+        },
+        "VehicleDescriptor": {
+          "edition": "proto2",
+          "fields": {
+            "id": {
+              "type": "string",
+              "id": 1
+            },
+            "label": {
+              "type": "string",
+              "id": 2
+            },
+            "licensePlate": {
+              "type": "string",
+              "id": 3,
+              "protoName": "license_plate"
+            },
+            "wheelchairAccessible": {
+              "type": "WheelchairAccessible",
+              "id": 4,
+              "protoName": "wheelchair_accessible",
+              "options": {
+                "default": "NO_VALUE"
+              }
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "WheelchairAccessible": {
+              "values": {
+                "NO_VALUE": 0,
+                "UNKNOWN": 1,
+                "WHEELCHAIR_ACCESSIBLE": 2,
+                "WHEELCHAIR_INACCESSIBLE": 3
+              }
+            }
+          }
+        },
+        "EntitySelector": {
+          "edition": "proto2",
+          "fields": {
+            "agencyId": {
+              "type": "string",
+              "id": 1,
+              "protoName": "agency_id"
+            },
+            "routeId": {
+              "type": "string",
+              "id": 2,
+              "protoName": "route_id"
+            },
+            "routeType": {
+              "type": "int32",
+              "id": 3,
+              "protoName": "route_type"
+            },
+            "trip": {
+              "type": "TripDescriptor",
+              "id": 4
+            },
+            "stopId": {
+              "type": "string",
+              "id": 5,
+              "protoName": "stop_id"
+            },
+            "directionId": {
+              "type": "uint32",
+              "id": 6,
+              "protoName": "direction_id"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ]
+        },
+        "TranslatedString": {
+          "edition": "proto2",
+          "fields": {
+            "translation": {
+              "rule": "repeated",
+              "type": "Translation",
+              "id": 1
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "Translation": {
+              "fields": {
+                "text": {
+                  "rule": "required",
+                  "type": "string",
+                  "id": 1
+                },
+                "language": {
+                  "type": "string",
+                  "id": 2
+                }
+              },
+              "extensions": [
+                [
+                  1000,
+                  1999
+                ],
+                [
+                  9000,
+                  9999
+                ]
+              ]
+            }
+          }
+        },
+        "TranslatedImage": {
+          "edition": "proto2",
+          "fields": {
+            "localizedImage": {
+              "rule": "repeated",
+              "type": "LocalizedImage",
+              "id": 1,
+              "protoName": "localized_image"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "LocalizedImage": {
+              "fields": {
+                "url": {
+                  "rule": "required",
+                  "type": "string",
+                  "id": 1
+                },
+                "mediaType": {
+                  "rule": "required",
+                  "type": "string",
+                  "id": 2,
+                  "protoName": "media_type"
+                },
+                "language": {
+                  "type": "string",
+                  "id": 3
+                }
+              },
+              "extensions": [
+                [
+                  1000,
+                  1999
+                ],
+                [
+                  9000,
+                  9999
+                ]
+              ]
+            }
+          }
+        },
+        "Shape": {
+          "edition": "proto2",
+          "fields": {
+            "shapeId": {
+              "type": "string",
+              "id": 1,
+              "protoName": "shape_id"
+            },
+            "encodedPolyline": {
+              "type": "string",
+              "id": 2,
+              "protoName": "encoded_polyline"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ]
+        },
+        "Stop": {
+          "edition": "proto2",
+          "fields": {
+            "stopId": {
+              "type": "string",
+              "id": 1,
+              "protoName": "stop_id"
+            },
+            "stopCode": {
+              "type": "TranslatedString",
+              "id": 2,
+              "protoName": "stop_code"
+            },
+            "stopName": {
+              "type": "TranslatedString",
+              "id": 3,
+              "protoName": "stop_name"
+            },
+            "ttsStopName": {
+              "type": "TranslatedString",
+              "id": 4,
+              "protoName": "tts_stop_name"
+            },
+            "stopDesc": {
+              "type": "TranslatedString",
+              "id": 5,
+              "protoName": "stop_desc"
+            },
+            "stopLat": {
+              "type": "float",
+              "id": 6,
+              "protoName": "stop_lat"
+            },
+            "stopLon": {
+              "type": "float",
+              "id": 7,
+              "protoName": "stop_lon"
+            },
+            "zoneId": {
+              "type": "string",
+              "id": 8,
+              "protoName": "zone_id"
+            },
+            "stopUrl": {
+              "type": "TranslatedString",
+              "id": 9,
+              "protoName": "stop_url"
+            },
+            "parentStation": {
+              "type": "string",
+              "id": 11,
+              "protoName": "parent_station"
+            },
+            "stopTimezone": {
+              "type": "string",
+              "id": 12,
+              "protoName": "stop_timezone"
+            },
+            "wheelchairBoarding": {
+              "type": "WheelchairBoarding",
+              "id": 13,
+              "protoName": "wheelchair_boarding",
+              "options": {
+                "default": "UNKNOWN"
+              }
+            },
+            "levelId": {
+              "type": "string",
+              "id": 14,
+              "protoName": "level_id"
+            },
+            "platformCode": {
+              "type": "TranslatedString",
+              "id": 15,
+              "protoName": "platform_code"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "WheelchairBoarding": {
+              "values": {
+                "UNKNOWN": 0,
+                "AVAILABLE": 1,
+                "NOT_AVAILABLE": 2
+              }
+            }
+          }
+        },
+        "TripModifications": {
+          "edition": "proto2",
+          "fields": {
+            "selectedTrips": {
+              "rule": "repeated",
+              "type": "SelectedTrips",
+              "id": 1,
+              "protoName": "selected_trips"
+            },
+            "startTimes": {
+              "rule": "repeated",
+              "type": "string",
+              "id": 2,
+              "protoName": "start_times"
+            },
+            "serviceDates": {
+              "rule": "repeated",
+              "type": "string",
+              "id": 3,
+              "protoName": "service_dates"
+            },
+            "modifications": {
+              "rule": "repeated",
+              "type": "Modification",
+              "id": 4
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ],
+          "nested": {
+            "Modification": {
+              "fields": {
+                "startStopSelector": {
+                  "type": "StopSelector",
+                  "id": 1,
+                  "protoName": "start_stop_selector"
+                },
+                "endStopSelector": {
+                  "type": "StopSelector",
+                  "id": 2,
+                  "protoName": "end_stop_selector"
+                },
+                "propagatedModificationDelay": {
+                  "type": "int32",
+                  "id": 3,
+                  "protoName": "propagated_modification_delay",
+                  "options": {
+                    "default": 0
+                  }
+                },
+                "replacementStops": {
+                  "rule": "repeated",
+                  "type": "ReplacementStop",
+                  "id": 4,
+                  "protoName": "replacement_stops"
+                },
+                "serviceAlertId": {
+                  "type": "string",
+                  "id": 5,
+                  "protoName": "service_alert_id"
+                },
+                "lastModifiedTime": {
+                  "type": "uint64",
+                  "id": 6,
+                  "protoName": "last_modified_time"
+                }
+              },
+              "extensions": [
+                [
+                  1000,
+                  1999
+                ],
+                [
+                  9000,
+                  9999
+                ]
+              ]
+            },
+            "SelectedTrips": {
+              "fields": {
+                "tripIds": {
+                  "rule": "repeated",
+                  "type": "string",
+                  "id": 1,
+                  "protoName": "trip_ids"
+                },
+                "shapeId": {
+                  "type": "string",
+                  "id": 2,
+                  "protoName": "shape_id"
+                }
+              },
+              "extensions": [
+                [
+                  1000,
+                  1999
+                ],
+                [
+                  9000,
+                  9999
+                ]
+              ]
+            }
+          }
+        },
+        "StopSelector": {
+          "edition": "proto2",
+          "fields": {
+            "stopSequence": {
+              "type": "uint32",
+              "id": 1,
+              "protoName": "stop_sequence"
+            },
+            "stopId": {
+              "type": "string",
+              "id": 2,
+              "protoName": "stop_id"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ]
+        },
+        "ReplacementStop": {
+          "edition": "proto2",
+          "fields": {
+            "travelTimeToStop": {
+              "type": "int32",
+              "id": 1,
+              "protoName": "travel_time_to_stop"
+            },
+            "stopId": {
+              "type": "string",
+              "id": 2,
+              "protoName": "stop_id"
+            }
+          },
+          "extensions": [
+            [
+              1000,
+              1999
+            ],
+            [
+              9000,
+              9999
+            ]
+          ]
+        }
+      }
+    },
+    "TripReplacementPeriod": {
+      "edition": "proto2",
+      "fields": {
+        "routeId": {
+          "type": "string",
+          "id": 1,
+          "protoName": "route_id"
+        },
+        "replacementPeriod": {
+          "type": "transit_realtime.TimeRange",
+          "id": 2,
+          "protoName": "replacement_period"
+        }
+      }
+    },
+    "NyctFeedHeader": {
+      "edition": "proto2",
+      "fields": {
+        "nyctSubwayVersion": {
+          "rule": "required",
+          "type": "string",
+          "id": 1,
+          "protoName": "nyct_subway_version"
+        },
+        "tripReplacementPeriod": {
+          "rule": "repeated",
+          "type": "TripReplacementPeriod",
+          "id": 2,
+          "protoName": "trip_replacement_period"
+        }
+      }
+    },
+    "nyctFeedHeader": {
+      "edition": "proto2",
+      "type": "NyctFeedHeader",
+      "id": 1001,
+      "extend": "transit_realtime.FeedHeader",
+      "protoName": "nyct_feed_header"
+    },
+    "NyctTripDescriptor": {
+      "edition": "proto2",
+      "fields": {
+        "trainId": {
+          "type": "string",
+          "id": 1,
+          "protoName": "train_id"
+        },
+        "isAssigned": {
+          "type": "bool",
+          "id": 2,
+          "protoName": "is_assigned"
+        },
+        "direction": {
+          "type": "Direction",
+          "id": 3
+        }
+      },
+      "nested": {
+        "Direction": {
+          "values": {
+            "NORTH": 1,
+            "EAST": 2,
+            "SOUTH": 3,
+            "WEST": 4
+          }
+        }
+      }
+    },
+    "nyctTripDescriptor": {
+      "edition": "proto2",
+      "type": "NyctTripDescriptor",
+      "id": 1001,
+      "extend": "transit_realtime.TripDescriptor",
+      "protoName": "nyct_trip_descriptor"
+    },
+    "NyctStopTimeUpdate": {
+      "edition": "proto2",
+      "fields": {
+        "scheduledTrack": {
+          "type": "string",
+          "id": 1,
+          "protoName": "scheduled_track"
+        },
+        "actualTrack": {
+          "type": "string",
+          "id": 2,
+          "protoName": "actual_track"
+        }
+      }
+    },
+    "nyctStopTimeUpdate": {
+      "edition": "proto2",
+      "type": "NyctStopTimeUpdate",
+      "id": 1001,
+      "extend": "transit_realtime.TripUpdate.StopTimeUpdate",
+      "protoName": "nyct_stop_time_update"
+    }
+  }
+}
