@@ -14,6 +14,14 @@ html {
   font-size: calc(16px * var(--text-scale));
 }
 
+/* Helvetica everywhere: classic MTA signage look. Overrides the shared
+   theme (Outfit/Inter) for this board only — no font files to load since
+   Helvetica is a system font. */
+:root {
+  --font-display: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+  --font-body: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+}
 
 /* Alert carousel marquee: --marquee-shift is set per-alert in JS to exactly
    the text overflow, so the full message always ends flush right-aligned. */
