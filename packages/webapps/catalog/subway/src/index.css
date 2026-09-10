@@ -1,1 +1,27 @@
 @import "@bridgething/webapp-shared/styles.css";
+
+/*
+ * Single text-size knob. Every font size in the theme is rem-based (as is
+ * Tailwind spacing), so scaling the root font size scales the whole board
+ * proportionally. 1 = 16px root (design default); 1.125 = 18px. The device
+ * canvas stays a fixed 800x480 px — only text and spacing scale.
+ */
+:root {
+  --text-scale: 1.250;
+}
+
+html {
+  font-size: calc(16px * var(--text-scale));
+}
+
+
+/* Alert carousel marquee: --marquee-shift is set per-alert in JS to exactly
+   the text overflow, so the full message always ends flush right-aligned. */
+@keyframes alert-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--marquee-shift, -100%));
+  }
+}
