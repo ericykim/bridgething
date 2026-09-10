@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { lookup } from 'node:dns/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isIPv4, type AddressInfo } from 'node:net';
 import { networkInterfaces } from 'node:os';
@@ -11,7 +12,6 @@ import {
   listWebapps,
   navigateKiosk,
   resolveGatewayTarget,
-  resolveHost,
   switchTo,
   uuidToString,
   type GatewayTarget,
@@ -28,7 +28,15 @@ const SWITCH_SETTLE_MS = 1_000;
 export async function daemonProxyTarget(): Promise<string> {
   const explicit = process.env.BRIDGETHING_DAEMON_URL;
   if (explicit) return explicit.replace(/\/$/, '');
-  return `ws://${await resolveHost(deviceHostName())}:${DAEMON_PORT}`;
+  try {
+    const host = (await lookup(deviceHostName(), { family: 4 })).address;
+    return `ws://${host}:${DAEMON_PORT}`;
+  } catch {
+    // The device host does not resolve, so there is no Car Thing on the
+    // network; assume a local dev daemon (`just dev-daemon`) instead of
+    // pointing the proxy at an unresolvable name.
+    return `ws://127.0.0.1:${DAEMON_PORT}`;
+  }
 }
 
 export async function daemonProxy(): Promise<Record<string, ProxyOptions>> {

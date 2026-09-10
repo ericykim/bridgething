@@ -322,6 +322,23 @@ push-mfi-proxy: build-image
 push-webapp local name="":
   scripts/bridgething-push-webapp {{local}} {{name}}
 
+# Build a webapp bundle and install it into the dev daemon's webapps dir.
+# For iterating against `just dev-daemon` (+ desktop-dev) with no Car Thing:
+#   just push-dev-webapp packages/webapps/catalog/subway
+# The kiosk serves bundles off disk, so switch away and back (or reload the
+# kiosk) for the board, and reopen the settings screen in the desktop app.
+push-dev-webapp dir:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  app="{{justfile_directory()}}/{{dir}}"
+  cd "$app"
+  bun run build
+  hex="$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' dist/manifest.json | head -1 | tr -d -)"
+  dest="{{justfile_directory()}}/.dev/webapps/$hex"
+  mkdir -p "$dest"
+  rsync -a --delete "$app/dist/" "$dest/"
+  echo "installed into $dest"
+
 # SSH into the device. Forwards the command as one string, so `;` and `&&` reach the device.
 ssh *args:
   @bash -c 'source scripts/device.sh && device_ssh "$1"' -- {{quote(args)}}
