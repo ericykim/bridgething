@@ -1,0 +1,291 @@
+<!doctype html>
+<!--
+  Static mockup of the subway webapp board with a G-train suspension alert,
+  matching packages/webapps/catalog/subway/src/App.tsx and the theme in
+  packages/ui/src/theme.css. Open in a browser: both the top banner and the
+  row strip are carousels with the real hold/marquee/rotate behavior.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>subway alerts demo</title>
+<style>
+  :root {
+    --off-white: #efefef;
+    --bg: #0a0c0e;
+    --screen: #060809;
+    --warn: #ff7070;
+    --rule: rgba(239, 239, 239, 0.1);
+    --dim: rgba(239, 239, 239, 0.35);
+    --near: rgba(239, 239, 239, 0.8);
+    --warn-soft: rgba(255, 112, 112, 0.14);
+  }
+  html { font-size: calc(16px * 1.125); }
+  body {
+    margin: 0;
+    background: #222;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--off-white);
+  }
+  /* 800x480 device canvas */
+  #device {
+    width: 800px;
+    height: 480px;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--rule);
+    padding: 1.5rem 2rem 0.75rem;
+  }
+  .hero {
+    font-size: 1.375rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .eyebrow {
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.6875rem;
+    letter-spacing: 0.25em;
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+  main { flex: 1; overflow-y: auto; padding: 0 2rem 1.5rem; }
+
+  /* carousel strip: top banner and row strips share the same behavior */
+  .carousel {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    overflow: hidden;
+  }
+  .top-banner {
+    margin-bottom: 0.5rem;
+    border: 1px solid rgba(255, 112, 112, 0.4);
+    border-radius: 4px;
+    background: var(--warn-soft);
+    padding: 0.5rem 0.75rem;
+  }
+  .row-strip {
+    border-top: 1px solid rgba(255, 112, 112, 0.4);
+    background: var(--warn-soft);
+    padding: 0.375rem 1rem;
+  }
+  .bullet {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 112, 112, 0.4);
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--warn);
+  }
+  .carousel-text-clip {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+  .carousel-text {
+    display: inline-block;
+    white-space: nowrap;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.75rem;
+    color: var(--warn);
+    will-change: transform;
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(var(--shift, -100%)); }
+  }
+
+  /* arrival rows */
+  .rows { display: flex; flex-direction: column; gap: 0.5rem; }
+  .row {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--rule);
+    background: var(--screen);
+  }
+  .row-inner { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; }
+  .row .bullet {
+    width: 2rem; height: 2rem;
+    border: 0;
+    color: #fff;
+    font-size: 0.875rem;
+  }
+  .row-main { min-width: 0; flex: 1; }
+  .headsign {
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.9375rem;
+    color: var(--near);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .station-name {
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+  .chips { display: flex; flex-shrink: 0; align-items: center; gap: 0.25rem; }
+  .chip {
+    border: 1px solid var(--rule);
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+  .mins {
+    width: 4rem; flex-shrink: 0; text-align: right;
+    font-size: 1.25rem;
+  }
+  .mins small {
+    margin-left: 0.25rem;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.75rem; color: var(--dim);
+  }
+</style>
+</head>
+<body>
+<div id="device">
+  <header>
+    <div class="hero">inbound</div>
+    <div class="eyebrow">alerts feed live</div>
+  </header>
+  <main>
+    <!-- each top alert gets its own banner: the elevator notice holds still
+         (fits on one line) while the G suspension loops its marquee -->
+    <div id="top-banner-1" class="carousel top-banner">
+      <div id="top-clip-1" class="carousel-text-clip">
+        <span id="top-text-1" class="carousel-text"></span>
+      </div>
+    </div>
+    <div id="top-banner-2" class="carousel top-banner">
+      <span id="top-bullet-2" class="bullet" style="display:none;"></span>
+      <div id="top-clip-2" class="carousel-text-clip">
+        <span id="top-text-2" class="carousel-text"></span>
+      </div>
+    </div>
+    <div class="rows">
+      <div class="row">
+        <div class="row-inner">
+          <span class="bullet" style="background:#0039A6;">E</span>
+          <div class="row-main">
+            <div class="headsign">Jamaica Ctr</div>
+            <div class="station-name">Court Sq</div>
+          </div>
+          <div class="chips"><span class="chip">7</span><span class="chip">14</span></div>
+          <div class="mins">3<small>min</small></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-inner">
+          <span class="bullet" style="background:#FF6319; color:#000;">M</span>
+          <div class="row-main">
+            <div class="headsign">Middle Village</div>
+            <div class="station-name">Court Sq</div>
+          </div>
+          <div class="chips"><span class="chip">11</span><span class="chip">19</span></div>
+          <div class="mins">8<small>min</small></div>
+        </div>
+        <!-- row-level carousel strip: M delay rotates/marquees here -->
+        <div id="row-strip" class="carousel row-strip">
+          <div id="row-clip" class="carousel-text-clip">
+            <span id="row-text" class="carousel-text"></span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-inner">
+          <span class="bullet" style="background:#B933AD;">7</span>
+          <div class="row-main">
+            <div class="headsign">34 St Hudson Yards</div>
+            <div class="station-name">Court Sq</div>
+          </div>
+          <div class="chips"><span class="chip">4</span><span class="chip">12</span></div>
+          <div class="mins">2<small>min</small></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+  // same hold/marquee/rotate behavior as AlertCarousel in App.tsx: text that
+  // fits holds then advances; overflow marquees exactly its overflow, pauses,
+  // then advances. A single item loops its own marquee.
+  function carousel(stripId, clipId, textId, bulletId, items) {
+    const clip = document.getElementById(clipId);
+    const span = document.getElementById(textId);
+    const bullet = bulletId ? document.getElementById(bulletId) : null;
+    let pos = 0;
+    let timer;
+
+    function render() {
+      const item = items[pos % items.length];
+      if (bullet) {
+        if (item.routeId) {
+          bullet.style.display = '';
+          bullet.textContent = item.routeId;
+        } else {
+          bullet.style.display = 'none';
+        }
+      }
+      span.textContent = item.text;
+      span.style.animation = '';
+      step();
+    }
+
+    function step() {
+      const overflow = span.scrollWidth - clip.clientWidth;
+      if (overflow <= 4) {
+        // fits: hold, then rotate to the next item
+        if (items.length > 1) timer = setTimeout(next, 6000);
+        return;
+      }
+      // too long: pause, marquee the overflow, then park at the end for a
+      // beat before advancing. The forwards fill keeps the tail readable
+      // during the park; the advance timer runs duration + park, not park
+      // alone, so the marquee is never interrupted mid-scroll.
+      const duration = Math.max(4000, overflow * 18);
+      timer = setTimeout(() => {
+        span.style.setProperty('--shift', `${-overflow - 8}px`);
+        span.style.animation = `marquee ${duration}ms linear forwards`;
+        timer = setTimeout(next, duration + 2000);
+      }, 1500);
+    }
+
+    function next() {
+      pos += 1;
+      render();
+    }
+
+    render();
+  }
+
+  carousel('top-banner-1', 'top-clip-1', 'top-text-1', null, [
+    { routeId: null, text: 'Elevator at Court Sq is out of service' },
+  ]);
+
+  carousel('top-banner-2', 'top-clip-2', 'top-text-2', 'top-bullet-2', [
+    {
+      routeId: 'G',
+      text: 'G trains are suspended in both directions for scheduled track maintenance · Fri Sep 26 10:45 PM - Mon Sep 28 5:00 AM',
+    },
+  ]);
+
+  carousel('row-strip', 'row-clip', 'row-text', null, [
+    { routeId: null, text: 'M service is delayed while crews repair signals between Myrtle Av and Essex St · Tue Sep 22 10:45 PM - Wed Sep 23 5:00 AM, Wed Sep 23 10:45 PM - Thu Sep 24 5:00 AM' },
+  ]);
+</script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<!--
+  Pause-at-end demo for the AlertCarousel behavior. Single strip, text sized
+  so the marquee is about 4 seconds. The badge below the strip names the
+  current phase so the 2s parked-at-end wait is easy to observe.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>alert pause demo</title>
+<style>
+  :root {
+    --off-white: #efefef;
+    --bg: #0a0c0e;
+    --screen: #060809;
+    --warn: #ff7070;
+    --rule: rgba(239, 239, 239, 0.1);
+    --dim: rgba(239, 239, 239, 0.35);
+    --warn-soft: rgba(255, 112, 112, 0.14);
+  }
+  html { font-size: calc(16px * 1.125); }
+  body {
+    margin: 0;
+    background: #222;
+    font-family: 'Outfit', system-ui, sans-serif;
+    color: var(--off-white);
+    display: flex;
+    justify-content: center;
+    padding-top: 3rem;
+  }
+  #device { width: 800px; background: var(--bg); padding: 1.5rem 0; }
+  .strip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    overflow: hidden;
+    margin: 0 2rem;
+    border: 1px solid rgba(255, 112, 112, 0.4);
+    border-radius: 4px;
+    background: var(--warn-soft);
+    padding: 0.5rem 0.75rem;
+  }
+  .bullet {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 112, 112, 0.4);
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--warn);
+  }
+  .clip { min-width: 0; flex: 1; overflow: hidden; }
+  .text {
+    display: inline-block;
+    white-space: nowrap;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    color: var(--warn);
+    will-change: transform;
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(var(--shift, -100%)); }
+  }
+  /* phase readout */
+  #phase {
+    margin: 1rem 2rem 0;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    color: var(--dim);
+  }
+  #phase b { color: var(--off-white); font-weight: 600; }
+  #phase.parked #label { color: var(--warn); }
+</style>
+</head>
+<body>
+<div id="device">
+  <div class="strip">
+    <span class="bullet">G</span>
+    <div class="clip">
+      <span id="text" class="text"></span>
+    </div>
+  </div>
+  <div id="phase"><span id="label"></span></div>
+</div>
+<script>
+  // Same hold/marquee/park cycle as AlertCarousel, with a phase readout.
+  const TEXT = 'G trains are suspended in both directions · Fri Sep 26 10:45 PM - Mon Sep 28 5:00 AM';
+  const HOLD_MS = 1500;       // before the scroll starts
+  const PARK_MS = 2000;       // parked at the end: finish reading
+  const MIN_MARQUEE_MS = 4000;
+
+  const span = document.getElementById('text');
+  const clip = span.parentElement;
+  const label = document.getElementById('label');
+  const phase = document.getElementById('phase');
+
+  span.textContent = TEXT;
+
+  function cycle() {
+    const overflow = span.scrollWidth - clip.clientWidth;
+    if (overflow <= 4) {
+      setPhase('fits on one line: nothing to scroll');
+      return;
+    }
+    const duration = Math.max(MIN_MARQUEE_MS, overflow * 18);
+
+    setPhase('holding before scroll...');
+    setTimeout(() => {
+      span.style.setProperty('--shift', `${-overflow - 8}px`);
+      span.style.animation = `marquee ${duration}ms linear forwards`;
+      setPhase('scrolling...');
+      // advance timer runs duration + park: the marquee always finishes, then
+      // the forwards fill parks the text at the end for the reading pause
+      setTimeout(() => {
+        setPhase('PARKED AT END - finish reading (' + PARK_MS / 1000 + 's)');
+        setTimeout(() => {
+          span.style.animation = '';
+          cycle();
+        }, PARK_MS);
+      }, duration);
+    }, HOLD_MS);
+  }
+
+  function setPhase(text) {
+    label.textContent = text;
+    phase.classList.toggle('parked', text.startsWith('PARKED'));
+  }
+
+  cycle();
+</script>
+</body>
+</html>
