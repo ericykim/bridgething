@@ -2,7 +2,7 @@
  * MTA service alerts: fetch the camsys/subway-alerts GTFS-Realtime feed on a
  * slower cadence than trip updates (the alerts feed is a full-dataset snapshot,
  * ~435 KB), decode with the same compiled gtfs-realtime descriptor, and match
- * alerts onto configured lines. Standard GTFS-RT alert fields are enough for
+ * alerts onto the configured stations (station-level) and their lines (row-level). Standard GTFS-RT alert fields are enough for
  * the indicator + text; Mercury's rich-text extensions are ignored.
  */
 
@@ -91,55 +91,86 @@ export function activeAlerts(alerts: TransitAlert[], now: number): TransitAlert[
   );
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Compact local timestamp, e.g. "Fri Sep 25 9:45 PM". Local device time: the
+ * windows are enforcement windows (roughly 10:45 PM to 5 AM) and riders think
+ * in local time. */
+function formatMoment(ms: number): string {
+  const d = new Date(ms);
+  let h = d.getHours();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${WEEKDAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()} ${h}:${min} ${ampm}`;
+}
+
 /**
- * Match active alerts against the configured stations. Route selectors match
- * directly against the lines the stations serve. A stop/complex-only alert
- * (no route selectors) falls back to the routes serving the stop's station.
- * Alerts touching none of the configured stations have no row to sit on and
- * come back in `screenLevel` for the banner.
+ * Every active window as compact local timestamps, e.g.
+ * "Fri Sep 25 10:45 PM - Mon Sep 28 5:00 AM" (joined by ", " when the alert
+ * has several). Open-ended sides render as "from X" / "until Y"; an alert
+ * with no windows (always active) returns null.
  */
+export function formatActivePeriods(alert: TransitAlert): string | null {
+  const parts: string[] = [];
+  for (const p of alert.activePeriods) {
+    const start = p.start == null ? null : formatMoment(p.start);
+    const end = p.end == null ? null : formatMoment(p.end);
+    if (start && end) parts.push(`${start} - ${end}`);
+    else if (start) parts.push(`from ${start}`);
+    else if (end) parts.push(`until ${end}`);
+  }
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
+/**
+ * Match active alerts against the configured stations. A stop selector naming
+ * one of the configured stations makes the alert station-level — it is about
+ * that station and surfaces above all rows. Otherwise route selectors match
+ * against the lines the stations serve and the alert rides the matching rows.
+ * Alerts touching none of the configured stations (or their lines) are
+ * unrelated and simply not returned.
+ */
+export interface MatchedAlerts {
+  /** line-level alerts keyed by route id; rendered on that route's row */
+  byRoute: Map<string, TransitAlert[]>;
+  /** station-level alerts; rendered above all rows */
+  stationLevel: TransitAlert[];
+}
+
 export function matchAlerts(
   active: TransitAlert[],
   stationIds: string[],
-): { byRoute: Map<string, TransitAlert[]>; screenLevel: TransitAlert[] } {
+): MatchedAlerts {
   const configuredRoutes = new Set<string>();
-  const platformToStation = new Map<string, string>();
+  // station ids and platform stop ids both count: feeds tag elevator-style
+  // notices with the complex id but trip-level selectors with platform ids
+  const configuredStops = new Set<string>();
   for (const id of stationIds) {
     const station = getStationById(id);
     if (!station) continue;
     for (const routeId of station.routes) configuredRoutes.add(routeId);
-    platformToStation.set(station.platforms.N, station.id);
-    platformToStation.set(station.platforms.S, station.id);
+    configuredStops.add(station.id);
+    configuredStops.add(station.platforms.N);
+    configuredStops.add(station.platforms.S);
   }
 
   const byRoute = new Map<string, TransitAlert[]>();
-  const screenLevel: TransitAlert[] = [];
+  const stationLevel: TransitAlert[] = [];
   for (const alert of active) {
-    const touched = new Set<string>();
-    for (const routeId of alert.routeIds) {
-      if (configuredRoutes.has(routeId)) touched.add(routeId);
+    if (alert.stopIds.some((stopId) => configuredStops.has(stopId))) {
+      stationLevel.push(alert);
+      continue;
     }
-    if (touched.size === 0) {
-      // station-level fallback: a stop/complex-only alert attributes to the
-      // routes serving that station (first matching platform wins)
-      for (const stopId of alert.stopIds) {
-        const stationId = platformToStation.get(stopId);
-        if (!stationId) continue;
-        for (const routeId of getStationById(stationId)?.routes ?? []) touched.add(routeId);
-        break;
-      }
-    }
-    if (touched.size === 0) {
-      screenLevel.push(alert);
-    } else {
-      for (const routeId of touched) {
-        let list = byRoute.get(routeId);
-        if (!list) byRoute.set(routeId, (list = []));
-        list.push(alert);
-      }
+    for (const routeId of new Set(alert.routeIds)) {
+      if (!configuredRoutes.has(routeId)) continue;
+      let list = byRoute.get(routeId);
+      if (!list) byRoute.set(routeId, (list = []));
+      list.push(alert);
     }
   }
-  return { byRoute, screenLevel };
+  return { byRoute, stationLevel };
 }
 
 export interface AlertState {
@@ -160,7 +191,6 @@ export class AlertPoller {
   private lastGoodAt: number | null = null;
 
   constructor(
-    private readonly apiKey: string,
     private readonly fetchFeed: FetchFeed,
     private readonly onChange?: (state: AlertState) => void,
   ) {}
@@ -184,7 +214,7 @@ export class AlertPoller {
     if (this.inFlight) return;
     this.inFlight = true;
     try {
-      const bytes = await this.fetchFeed(ALERTS_FEED_URL, this.apiKey);
+      const bytes = await this.fetchFeed(ALERTS_FEED_URL);
       const feed = decodeFeedMessage(bytes);
       const extracted = extractAlerts(feed);
       // dedupe repeated entities by alert id, first wins; entities without an
@@ -197,10 +227,7 @@ export class AlertPoller {
       this.lastGoodAt = Date.now();
       this.onChange?.(this.state);
     } catch {
-      // keep previous good alerts; retry on the next tick. A key rejected by
-      // the alerts feed specifically is not surfaced (unlike FeedPoller's
-      // ApiKeyError) — alerts are auxiliary and the arrivals feeds share the
-      // key, so the board footer already points at the settings page.
+      // keep previous good alerts; retry on the next tick.
       this.onChange?.(this.state);
     } finally {
       this.inFlight = false;

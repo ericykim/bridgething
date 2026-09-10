@@ -5,7 +5,7 @@
  * unit-tested without React or the daemon.
  */
 
-import { getRoute, type Direction } from './static-data';
+import { getRoute, getStationById, type Direction } from './static-data';
 import type { Arrival } from './feeds';
 import type { TransitAlert } from './alerts.ts';
 
@@ -20,11 +20,13 @@ export type BoardRow = {
   textColor: string | null;
   /** Destination headsign of the next arriving train. */
   headsign: string;
+  /** Name of the configured station the next arriving train was matched at, or null. */
+  stationName: string | null;
   /** The train the row is counting down to. */
   next: Arrival;
   /** Following trains on this line for the shown direction, soonest first, capped at FOLLOWING_CAP. */
   following: Arrival[];
-  /** Active service alerts for this line (indicator + text on the row), empty when none. */
+  /** Active service alerts for this line, rendered as a carousel strip at the bottom of the row card. */
   alerts: TransitAlert[];
 };
 
@@ -48,8 +50,10 @@ export function scrollDeltaForKey(key: string, viewportHeight: number): number |
 /**
  * Rows for the board, one per line, in the shown direction: next train +
  * capped following trains per route, rows sorted by soonest arrival across
- * all lines. Lines with no upcoming trains in the shown direction are
- * dropped (including lines with no service today).
+ * all lines. The station subtitle comes from the next arriving train's
+ * station (a line served by several configured stations shows the one its
+ * next train leaves from). Lines with no upcoming trains in the shown
+ * direction are dropped (including lines with no service today).
  */
 export function buildRows(
   arrivals: Arrival[],
@@ -75,6 +79,7 @@ export function buildRows(
       color: route?.color ?? null,
       textColor: route?.textColor ?? null,
       headsign: next.headsign,
+      stationName: getStationById(next.stationId)?.name ?? null,
       next,
       following: rest.slice(0, FOLLOWING_CAP),
       alerts: alertsByRoute.get(routeId) ?? [],

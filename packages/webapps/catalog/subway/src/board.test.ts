@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { FOLLOWING_CAP, buildRows, minutesUntil, scrollDeltaForKey, type BoardRow } from './board.ts';
+import { getStationById } from './static-data.ts';
 import type { Arrival } from './feeds.ts';
 import type { TransitAlert } from './alerts.ts';
 
@@ -21,8 +22,9 @@ function arrival(
   direction: 'N' | 'S',
   offsetMinutes: number,
   headsign = `${routeId} headsign`,
+  stationId = '127',
 ): Arrival {
-  return { routeId, headsign, direction, arrivalAt: min(offsetMinutes), tripId: `${routeId}-${offsetMinutes}` };
+  return { routeId, headsign, direction, arrivalAt: min(offsetMinutes), tripId: `${routeId}-${offsetMinutes}`, stationId };
 }
 
 describe('scrollDeltaForKey', () => {
@@ -86,6 +88,20 @@ describe('buildRows', () => {
   test('trains on the other direction are dropped', () => {
     const rows = buildRows([arrival('6', 'S', 3), arrival('6', 'N', 9), arrival('L', 'S', 1)], 'N');
     expect(rows.map((r) => r.routeId)).toEqual(['6']);
+  });
+
+  test('the station subtitle is the next arriving train\'s station', () => {
+    // Van Cortlandt Park-242 St (127) is the bundled name for station 127;
+    // a row whose next train leaves 635 shows that station instead
+    const from127 = buildRows([arrival('1', 'N', 5)], 'N', noAlerts);
+    expect(from127[0]!.stationName).toBe(getStationById('127')!.name);
+    const from635 = buildRows([arrival('6', 'N', 5, undefined, '635')], 'N', noAlerts);
+    expect(from635[0]!.stationName).toBe(getStationById('635')!.name);
+  });
+
+  test('an unknown station id renders a null subtitle', () => {
+    const rows = buildRows([arrival('1', 'N', 5, undefined, 'nonexistent')], 'N', noAlerts);
+    expect(rows[0]!.stationName).toBeNull();
   });
 
   test('routes with no upcoming trains in the shown direction are hidden', () => {

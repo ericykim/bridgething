@@ -1,11 +1,17 @@
 import { BridgethingClient } from '@bridgething/client';
 import { daemonUrl } from '@bridgething/webapp-shared/daemon';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertPoller, activeAlerts, matchAlerts, type AlertState } from './alerts';
+import {
+  AlertPoller,
+  activeAlerts,
+  formatActivePeriods,
+  matchAlerts,
+  type AlertState,
+  type TransitAlert,
+} from './alerts';
 import { buildRows, minutesUntil, scrollDeltaForKey } from './board';
 import { configState, parseStationIds } from './config';
 import {
-  ApiKeyError,
   FeedPoller,
   buildPlatformIndex,
   feedGroupsForRoutes,
@@ -18,7 +24,7 @@ import { getStationById, type Direction } from './static-data';
 type Phase =
   | { kind: 'loading' }
   | { kind: 'unconfigured' }
-  | { kind: 'ready'; stationIds: string[]; apiKey: string | null }
+  | { kind: 'ready'; stationIds: string[] }
   | { kind: 'error'; message: string };
 
 export default function App() {
@@ -31,20 +37,16 @@ export default function App() {
     const load = async () => {
       if (cancelled) return;
       try {
-        const [stationsCfg, keyCfg] = await Promise.all([
-          client.config.get({ key: 'stations' }),
-          client.config.get({ key: 'mta_api_key' }),
-        ]);
+        const stationsCfg = await client.config.get({ key: 'stations' });
         if (cancelled) return;
 
         const stations = stationsCfg.ok ? stationsCfg.response.value : null;
-        const apiKey = keyCfg.ok && keyCfg.response.value?.trim() ? keyCfg.response.value.trim() : null;
-        const state = configState({ stations, mta_api_key: apiKey });
+        const state = configState(stations);
         if (state === 'unconfigured') {
           setPhase({ kind: 'unconfigured' });
           return;
         }
-        setPhase({ kind: 'ready', stationIds: parseStationIds(stations), apiKey });
+        setPhase({ kind: 'ready', stationIds: parseStationIds(stations) });
       } catch (err) {
         if (!cancelled) setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
       }
@@ -68,7 +70,7 @@ export default function App() {
       )}
       {phase.kind === 'error' && <Centered tone="muted">{phase.message}</Centered>}
       {phase.kind === 'ready' && (
-        <Board client={client} stationIds={phase.stationIds} apiKey={phase.apiKey} />
+        <Board client={client} stationIds={phase.stationIds} />
       )}
     </div>
   );
@@ -84,31 +86,40 @@ function useNow(intervalMs: number): number {
   return now;
 }
 
+/** Carousel text: the alert header plus its active windows, e.g.
+ * "No [G] between ... · Fri Sep 26 10:45 PM - Mon Sep 28 5:00 AM". */
+function alertDisplayText(alert: TransitAlert): string {
+  const base = alert.headerText ?? alert.descriptionText ?? alert.id;
+  const dates = formatActivePeriods(alert);
+  return dates ? `${base} · ${dates}` : base;
+}
+
 /**
  * The arrivals board: one row per line for the shown direction, ordered by
  * soonest arrival. Wheel rotation scrolls natively (overflow-y, clamps at the
  * ends); if a webview instead emits rotation as arrow keys, they map to a
  * scroll step of about one viewport. Wheel press arrives as an Enter keydown
  * and flips the direction for every row. Countdowns tick every second; data
- * refreshes on the poller's 30 s cadence. Alerts poll on the slower AlertPoller cadence: rows with an
- * active alert on their line carry an indicator + text; alerts with no row to
- * sit on surface in a screen-level banner. Stale feeds keep the last known
+ * refreshes on the poller's 30 s cadence. Alerts poll on the slower AlertPoller cadence. Line alerts ride
+ * their row as a full-width carousel strip under the card content, rotating
+ * through alerts and marquee-scrolling long text so nothing truncates;
+ * station-level alerts and alerts on a configured line that currently has no
+ * row get their own banner above all rows, each looping its own marquee so
+ * long text never truncates. Unrelated
+ * alerts are never shown. Stale feeds keep the last known
  * times, dimmed with an "old" marker, and recover automatically on reconnect.
  */
 function Board({
   client,
   stationIds,
-  apiKey,
 }: {
   client: BridgethingClient;
   stationIds: string[];
-  apiKey: string | null;
 }) {
   const [direction, setDirection] = useState<Direction>('N');
   const [pollerState, setPollerState] = useState<PollerState>({
     arrivals: [],
     health: new Map(),
-    apiKeyInvalid: false,
   });
   const [alertState, setAlertState] = useState<AlertState>({ alerts: [], lastGoodAt: null });
   const now = useNow(1_000);
@@ -140,32 +151,27 @@ function Board({
       if (!cancelled) setAlertState(state);
     };
 
-    const fetchFeed: FetchFeed = async (url, key) => {
-      // The MTA realtime feeds no longer require a key; one is only sent when
-      // the user has set one (header name must be lowercase per MTA docs).
-      const headers = key ? [{ name: 'x-api-key', value: key }] : [];
+    const fetchFeed: FetchFeed = async url => {
+      // The MTA realtime and alerts feeds work without an api key.
       const res = await client.net.fetch({
         request: {
           url,
           method: 'GET',
-          headers,
+          headers: [],
           body: null,
           timeoutMs: 12_000,
           redirect: 'follow',
         },
       });
       if (!res.ok) throw new Error('network request failed - is the phone connected?');
-      if (res.response.response.status === 401 || res.response.response.status === 403) {
-        throw new ApiKeyError();
-      }
       if (res.response.response.status >= 400) {
         throw new Error(`mta feed returned ${res.response.response.status}`);
       }
       return new Uint8Array(res.response.response.body);
     };
 
-    const poller = new FeedPoller(groups, platformIndex, apiKey ?? '', fetchFeed, onChange);
-    const alertPoller = new AlertPoller(apiKey ?? '', fetchFeed, onAlerts);
+    const poller = new FeedPoller(groups, platformIndex, fetchFeed, onChange);
+    const alertPoller = new AlertPoller(fetchFeed, onAlerts);
     setPollerState(poller.state); // drop arrivals from a previous line set
     setAlertState(alertPoller.state);
     poller.start();
@@ -175,7 +181,7 @@ function Board({
       poller.stop();
       alertPoller.stop();
     };
-  }, [client, groups, platformIndex, apiKey]);
+  }, [client, groups, platformIndex]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -207,19 +213,20 @@ function Board({
     [pollerState.arrivals, direction, matched],
   );
 
-  // Alerts with no row to sit on: none matched a configured line at all, or the
-  // line is currently rowless (no trains) — both surface as a screen-level banner.
-  const bannerAlerts = useMemo(() => {
+  // Above all rows: station-level alerts (about a selected station) first,
+  // then line-level alerts whose line currently has no row (no trains running
+  // on it). Those still belong to a selected line and get a route bullet.
+  const topAlerts = useMemo(() => {
     const rowRouteIds = new Set(rows.map((r) => r.routeId));
-    const rowless = [...matched.byRoute.entries()]
-      .filter(([routeId]) => !rowRouteIds.has(routeId))
-      .flatMap(([, alerts]) => alerts);
-    const seen = new Set<string>();
-    return [...matched.screenLevel, ...rowless].filter((a) => {
-      if (seen.has(a.id)) return false;
-      seen.add(a.id);
-      return true;
-    });
+    const items: Array<{ routeId: string | null; alert: TransitAlert }> = [];
+    for (const alert of matched.stationLevel) {
+      items.push({ routeId: null, alert });
+    }
+    for (const [routeId, alerts] of matched.byRoute) {
+      if (rowRouteIds.has(routeId)) continue;
+      for (const alert of alerts) items.push({ routeId, alert });
+    }
+    return items;
   }, [rows, matched]);
 
   // Stale hook for phase 5: every feed group past the staleness window dims the
@@ -233,22 +240,20 @@ function Board({
 
   return (
     <>
-      <header className="mb-3 flex items-baseline justify-between border-b border-rule px-8 pt-6 pb-3">
-        <div className="font-display text-hero font-medium tracking-display">subway</div>
-        <div className="font-mono text-eyebrow tracking-[0.25em] text-dim uppercase">
-          {stale && <span className="mr-3 text-warn">old</span>}
-          {direction === 'N' ? 'inbound' : 'outbound'}
+      <header className="mb-3 border-b border-rule px-3 pt-3 pb-3">
+        <div className="font-mono text-eyebrow text-dim font-semibold uppercase w-full flex items-baseline justify-between gap-3">
+        <div className="text-white">{direction === 'N' ? 'inbound' : 'outbound'}</div>
+          {true && <span className="text-warn">⚠ offline</span>}
         </div>
       </header>
-      <main ref={scrollerRef} className="flex-1 overflow-y-auto px-8 pb-6">
-        {bannerAlerts.length > 0 && (
-          <div className="mb-2 flex items-center gap-2 rounded border border-warn/40 bg-warn/10 px-3 py-2">
-            <span className="shrink-0 font-mono font-bold text-warn">!</span>
-            <span className="min-w-0 flex-1 truncate font-mono text-hint text-warn" title={bannerAlerts.map((a) => a.headerText ?? a.id).join(' - ')}>
-              {bannerAlerts.map((a) => a.headerText ?? a.id).join(' - ')}
-            </span>
-          </div>
-        )}
+      <main ref={scrollerRef} className="flex-1 overflow-y-auto px-4 pb-6">
+        {topAlerts.map(({ routeId, alert }) => (
+          <AlertCarousel
+            key={`${routeId ?? 'station'}:${alert.id}`}
+            className="mb-2 rounded border border-warn/40 bg-warn/10 px-3 py-2"
+            items={[{ routeId, text: alertDisplayText(alert) }]}
+          />
+        ))}
         {rows.length === 0 ? (
           <Centered tone="muted">
             {hadData
@@ -263,11 +268,6 @@ function Board({
           </div>
         )}
       </main>
-      <footer className="border-t border-rule px-8 py-2 font-mono text-hint tracking-[0.08em] text-dim uppercase">
-        {pollerState.apiKeyInvalid
-          ? 'mta rejected the api key - check it in the companion settings'
-          : 'wheel rotates to scroll - press flips inbound / outbound'}
-      </footer>
     </>
   );
 }
@@ -285,49 +285,124 @@ function BoardRowView({
   const bulletStyle = row.color ? { backgroundColor: `#${row.color}` } : undefined;
   const bulletText =
     row.textColor != null ? { color: `#${row.textColor}` } : undefined;
-  // first active alert's text is what the row surfaces; the rest ride along in the tooltip
-  const alert = row.alerts[0];
-  const alertText = alert ? (alert.headerText ?? alert.descriptionText ?? alert.id) : null;
-  const alertTitle = row.alerts.map((a) => a.headerText ?? a.descriptionText ?? a.id).join(' - ');
 
   return (
     <div
-      className={`flex items-center gap-3 border border-rule bg-screen px-4 py-3 transition-opacity ${
+      className={`flex flex-col border border-rule bg-screen transition-opacity ${
         stale ? 'opacity-50' : ''
       }`}
     >
-      <span
-        className="flex h-8 w-10 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold text-white"
-        style={bulletStyle}
-      >
-        <span style={bulletText}>{row.routeId}</span>
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="truncate font-mono text-row text-near">{row.headsign}</div>
-        {alertText && (
-          <div className="mt-0.5 flex items-center gap-1.5">
-            <span className="shrink-0 font-mono text-hint font-bold text-warn">!</span>
-            <span className="truncate font-mono text-hint text-warn" title={alertTitle}>
-              {alertText}
-            </span>
-          </div>
-        )}
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold text-white"
+          style={bulletStyle}
+        >
+          <span style={bulletText}>{row.routeId}</span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-mono text-row text-near font-bold">{row.headsign}</div>
+          {row.stationName && (
+            <div className="truncate font-mono text-hint text-dim font-semibold">{row.stationName}</div>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {row.following.map((a) => {
+            const m = minutesUntil(a.arrivalAt, now);
+            return (
+              <span
+                key={a.tripId}
+                className="rounded-full border border-rule px-2 py-0.5 font-mono text-hint text-dim"
+              >
+                {m === 0 ? 'now' : m}
+              </span>
+            );
+          })}
+        </div>
+        <div className="w-16 shrink-0 text-right font-display text-title">
+          {minutes === 0 ? 'now' : <>{minutes}<span className="ml-1 font-mono text-hint text-dim">min</span></>}
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {row.following.map((a) => {
-          const m = minutesUntil(a.arrivalAt, now);
-          return (
-            <span
-              key={a.tripId}
-              className="rounded-full border border-rule px-2 py-0.5 font-mono text-hint text-dim"
-            >
-              {m === 0 ? 'now' : m}
-            </span>
-          );
-        })}
-      </div>
-      <div className="w-16 shrink-0 text-right font-display text-title">
-        {minutes === 0 ? 'now' : <>{minutes}<span className="ml-1 font-mono text-hint text-dim">min</span></>}
+      {row.alerts.length > 0 && (
+        <AlertCarousel
+          className="border-t border-warn/40 bg-warn/10 px-4 py-1.5"
+          items={row.alerts.map((a) => ({
+            routeId: null,
+            text: alertDisplayText(a),
+          }))}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Carousel of alerts: one item at a time, advancing on its own. Text that
+ * fits holds still and rotates to the next item after a beat; text too long
+ * for one line marquee-scrolls exactly its overflow (never truncated),
+ * pauses at the end, then rotates. A single item loops its own marquee. The
+ * route bullet, when present, stays put: the text clips at its own edge so
+ * the marquee never slides underneath the bullet.
+ */
+function AlertCarousel({
+  items,
+  className,
+}: {
+  items: Array<{ routeId: string | null; text: string }>;
+  className: string;
+}) {
+  // pos advances forever; the index wraps, so a single alert re-runs its marquee
+  const [pos, setPos] = useState(0);
+  const clipRef = useRef<HTMLDivElement | null>(null);
+  const textRef = useRef<HTMLSpanElement | null>(null);
+
+  const item = items[pos % items.length]!;
+  const text = item.text;
+
+  useEffect(() => {
+    const clip = clipRef.current;
+    const span = textRef.current;
+    if (!clip || !span) return;
+    span.style.animation = '';
+    const overflow = span.scrollWidth - clip.clientWidth;
+    if (overflow <= 4) {
+      // fits: hold, then rotate to the next item
+      if (items.length > 1) {
+        const t = setTimeout(() => setPos((p) => p + 1), 6000);
+        return () => clearTimeout(t);
+      }
+      return;
+    }
+    // too long: pause, marquee the overflow, then park at the end for a beat
+    // before advancing. The forwards fill keeps the tail readable during the
+    // park; the advance timer runs duration + park, not park alone, so the
+    // marquee is never interrupted mid-scroll.
+    const duration = Math.max(4000, overflow * 18);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    timer = setTimeout(() => {
+      span.style.setProperty('--marquee-shift', `${-overflow - 8}px`);
+      span.style.animation = `alert-marquee ${duration}ms linear forwards`;
+      timer = setTimeout(() => setPos((p) => p + 1), duration + 2000);
+    }, 1500);
+    return () => {
+      if (timer) clearTimeout(timer);
+      span.style.animation = '';
+    };
+  }, [pos, text, items.length]);
+
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      {item.routeId && (
+        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-warn/40 font-mono text-hint font-bold text-warn">
+          {item.routeId}
+        </span>
+      )}
+      <div ref={clipRef} className="min-w-0 flex-1 overflow-hidden">
+        <span
+          ref={textRef}
+          className="inline-block whitespace-nowrap font-semibold text-hint text-warn will-change-transform"
+        >
+          {text}
+        </span>
       </div>
     </div>
   );

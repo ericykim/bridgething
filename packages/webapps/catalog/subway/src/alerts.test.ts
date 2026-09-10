@@ -6,6 +6,7 @@ import {
   AlertPoller,
   activeAlerts,
   extractAlerts,
+  formatActivePeriods,
   matchAlerts,
   type AlertState,
   type FetchFeed,
@@ -165,48 +166,114 @@ describe('activeAlerts', () => {
   });
 });
 
+describe('formatActivePeriods', () => {
+  // constructed with the local-time Date constructor to match the formatter,
+  // which renders in the device's local timezone
+  const alert = (activePeriods: TransitAlert['activePeriods']): TransitAlert => ({
+    id: 'a',
+    routeIds: ['G'],
+    stopIds: [],
+    activePeriods,
+    headerText: 'suspended',
+    descriptionText: null,
+  });
+
+  test('an alert with no windows is always active and renders no dates', () => {
+    expect(formatActivePeriods(alert([]))).toBeNull();
+  });
+
+  test('a closed window renders both ends', () => {
+    // Fri Sep 25 2026, 10:45 PM -> Mon Sep 28 2026, 5:00 AM local
+    const text = formatActivePeriods(
+      alert([{ start: new Date(2026, 8, 25, 22, 45).getTime(), end: new Date(2026, 8, 28, 5, 0).getTime() }]),
+    );
+    expect(text).toBe('Fri Sep 25 10:45 PM - Mon Sep 28 5:00 AM');
+  });
+
+  test('several windows join with commas', () => {
+    const text = formatActivePeriods(
+      alert([
+        { start: new Date(2026, 8, 22, 22, 45).getTime(), end: new Date(2026, 8, 23, 5, 0).getTime() },
+        { start: new Date(2026, 8, 23, 22, 45).getTime(), end: new Date(2026, 8, 24, 5, 0).getTime() },
+      ]),
+    );
+    expect(text).toBe('Tue Sep 22 10:45 PM - Wed Sep 23 5:00 AM, Wed Sep 23 10:45 PM - Thu Sep 24 5:00 AM');
+  });
+
+  test('an open-ended side renders as from/until', () => {
+    expect(formatActivePeriods(alert([{ start: new Date(2026, 8, 25, 22, 45).getTime(), end: null }]))).toBe(
+      'from Fri Sep 25 10:45 PM',
+    );
+    expect(formatActivePeriods(alert([{ start: null, end: new Date(2026, 8, 28, 5, 0).getTime() }]))).toBe(
+      'until Mon Sep 28 5:00 AM',
+    );
+  });
+});
+
 describe('matchAlerts', () => {
   // Stations 127 (Van Cortlandt Park-242 St, route 1) and 635 (route 6).
   const STATIONS = ['127', '635'];
 
   test('a route alert on a configured line lands on that line only', () => {
     const alerts = extractAlerts(decode(encodeAlerts([alertEntity('a', { routeIds: ['1'], header: 'Delays' })])));
-    const { byRoute, screenLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
+    const { byRoute, stationLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
     expect([...byRoute.keys()]).toEqual(['1']);
     expect(byRoute.get('1')![0]!.headerText).toBe('Delays');
-    expect(screenLevel).toEqual([]);
+    expect(stationLevel).toEqual([]);
   });
 
-  test('a route alert on an unconfigured line has no row to sit on and surfaces at screen level', () => {
+  test('a route alert on an unconfigured line is unrelated and not returned', () => {
     const alerts = extractAlerts(decode(encodeAlerts([alertEntity('a', { routeIds: ['G'], header: 'G detour' })])));
-    const { byRoute, screenLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
+    const { byRoute, stationLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
     expect(byRoute.size).toBe(0);
-    expect(screenLevel.map((a) => a.id)).toEqual(['a']);
+    expect(stationLevel).toEqual([]);
   });
 
-  test('a stop-only alert falls back to the routes serving that station', () => {
+  test('a stop selector at a configured station makes the alert station-level', () => {
     const alerts = extractAlerts(decode(encodeAlerts([alertEntity('a', { stopIds: ['635N'], header: 'Station change' })])));
-    const { byRoute, screenLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
-    // 635N is a 14 St-Union Sq platform, so every route serving that station is implicated
-    expect(byRoute.get('6')?.map((a) => a.id)).toEqual(['a']);
-    expect(byRoute.get('4')?.map((a) => a.id)).toEqual(['a']);
-    expect(screenLevel).toEqual([]);
+    const { byRoute, stationLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
+    // rides the top accordion, not any row, even though 6/4/etc serve the station
+    expect(byRoute.size).toBe(0);
+    expect(stationLevel.map((a) => a.id)).toEqual(['a']);
+  });
+
+  test('a complex-id stop selector at a configured station is station-level too', () => {
+    const alerts = extractAlerts(decode(encodeAlerts([alertEntity('a', { stopIds: ['635'] })])));
+    const { byRoute, stationLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
+    expect(byRoute.size).toBe(0);
+    expect(stationLevel.map((a) => a.id)).toEqual(['a']);
+  });
+
+  test('an alert naming both a configured station and its route is station-level', () => {
+    const alerts = extractAlerts(
+      decode(encodeAlerts([alertEntity('a', { routeIds: ['6'], stopIds: ['635N'], header: 'Skips' })])),
+    );
+    const { byRoute, stationLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
+    expect(byRoute.size).toBe(0);
+    expect(stationLevel.map((a) => a.id)).toEqual(['a']);
+  });
+
+  test('a stop selector at an unconfigured station is unrelated and not returned', () => {
+    const alerts = extractAlerts(decode(encodeAlerts([alertEntity('a', { stopIds: ['101N'], header: 'Elsewhere' })])));
+    const { byRoute, stationLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
+    expect(byRoute.size).toBe(0);
+    expect(stationLevel).toEqual([]);
   });
 
   test('an alert naming several routes is attributed to each matching row', () => {
     const alerts = extractAlerts(decode(encodeAlerts([alertEntity('a', { routeIds: ['1', '6'] })])));
-    const { byRoute, screenLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
+    const { byRoute, stationLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
     expect([...byRoute.keys()].sort()).toEqual(['1', '6']);
-    expect(screenLevel).toEqual([]);
+    expect(stationLevel).toEqual([]);
   });
 
   test('an inactive alert is not matched at all', () => {
     const alerts = extractAlerts(
       decode(encodeAlerts([alertEntity('a', { routeIds: ['1'], end: '2026-09-09T10:00:00Z' })])),
     );
-    const { byRoute, screenLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
+    const { byRoute, stationLevel } = matchAlerts(activeAlerts(alerts, NOW), STATIONS);
     expect(byRoute.size).toBe(0);
-    expect(screenLevel).toEqual([]);
+    expect(stationLevel).toEqual([]);
   });
 });
 
@@ -214,7 +281,7 @@ describe('AlertPoller', () => {
   const goodBytes = encodeAlerts([alertEntity('a', { routeIds: ['1'], header: 'Delays' })]);
 
   function poller(fetchFeed: FetchFeed, onChange?: (state: AlertState) => void): AlertPoller {
-    return new AlertPoller('key', fetchFeed, onChange);
+    return new AlertPoller(fetchFeed, onChange);
   }
 
   test('a successful poll records alerts', async () => {
