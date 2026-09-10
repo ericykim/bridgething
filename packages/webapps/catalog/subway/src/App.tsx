@@ -179,7 +179,10 @@ function Board({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat) return;
+      // e.repeat is only suppressed for the direction flip: a held press must
+      // not machine-gun flips, but rotation emitted as auto-repeat arrow keys
+      // (a possible webview behavior) needs the repeats to scroll smoothly.
+      if (e.repeat && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
       if (e.key === 'Enter') {
         setDirection((d) => (d === 'N' ? 'S' : 'N'));
         return;
