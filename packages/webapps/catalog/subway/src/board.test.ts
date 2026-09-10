@@ -1,6 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import { FOLLOWING_CAP, buildRows, minutesUntil, type BoardRow } from './board.ts';
 import type { Arrival } from './feeds.ts';
+import type { TransitAlert } from './alerts.ts';
+
+const alert = (id: string, routeIds: string[], headerText = `${id} text`): TransitAlert => ({
+  id,
+  routeIds,
+  stopIds: [],
+  activePeriods: [],
+  headerText,
+  descriptionText: null,
+});
+const noAlerts = new Map<string, TransitAlert[]>();
 
 const min = (offsetMinutes: number) => new Date(BASE + offsetMinutes * 60_000);
 const BASE = Date.UTC(2026, 8, 9, 12, 0, 0);
@@ -82,6 +93,23 @@ describe('buildRows', () => {
     const rows = buildRows([arrival('XX', 'N', 3)], 'N');
     expect(rows).toHaveLength(1);
     expect((rows[0] as BoardRow).color).toBeNull();
+  });
+
+  test('a row carries the active alerts for its line', () => {
+    const alerts = new Map<string, TransitAlert[]>([
+      ['6', [alert('a', ['6']), alert('b', ['6'])]],
+      ['L', [alert('c', ['L', '1'])]],
+    ]);
+    const rows = buildRows([arrival('6', 'N', 3), arrival('L', 'N', 5)], 'N', alerts);
+    expect(rows.map((r) => r.alerts.map((a) => a.id))).toEqual([['a', 'b'], ['c']]);
+    expect((rows[0] as BoardRow).alerts[0]!.headerText).toBe('a text');
+  });
+
+  test('rows without alerts carry an empty list when no alerts are passed', () => {
+    const rows = buildRows([arrival('6', 'N', 3)], 'N');
+    expect((rows[0] as BoardRow).alerts).toEqual([]);
+    const withNone = buildRows([arrival('6', 'N', 3)], 'N', noAlerts);
+    expect((withNone[0] as BoardRow).alerts).toEqual([]);
   });
 
   test('the headsign comes from the next train', () => {

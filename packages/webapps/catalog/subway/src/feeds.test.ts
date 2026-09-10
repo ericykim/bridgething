@@ -320,4 +320,29 @@ describe('FeedPoller', () => {
     await Promise.all([first, second]);
     expect(calls).toBe(1);
   });
+
+  test('staleness recovery: failed polls go stale, a good poll recovers automatically', async () => {
+    let fail = false;
+    const p = poller(async () => {
+      if (fail) throw new Error('phone disconnected');
+      return goodBytes;
+    });
+    await p.pollAll();
+    expect(isStale(p.state.health.get('gtfs')!, Date.now())).toBe(false);
+
+    // phone disconnects; enough failed polls plus elapsed time crosses the window
+    fail = true;
+    for (let i = 0; i < 3; i++) await p.pollAll();
+    const staleAt = Date.now() + STALE_AFTER_MS + 1;
+    expect(isStale(p.state.health.get('gtfs')!, staleAt)).toBe(true);
+    // last known times remain while stale
+    expect(p.state.arrivals).toHaveLength(1);
+
+    // reconnect: the next good poll recovers live data without any action
+    fail = false;
+    await p.pollAll();
+    expect(isStale(p.state.health.get('gtfs')!, Date.now())).toBe(false);
+    expect(p.state.arrivals).toHaveLength(1);
+    expect(p.state.health.get('gtfs')!.lastGoodAt).not.toBeNull();
+  });
 });
