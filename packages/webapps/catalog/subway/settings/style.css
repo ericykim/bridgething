@@ -55,6 +55,10 @@ h1 {
   border-bottom: 1px solid var(--line);
 }
 
+.autocomplete {
+  position: relative;
+}
+
 .search input,
 .field input {
   width: 100%;
@@ -71,6 +75,55 @@ h1 {
   outline: 1px solid var(--accent);
 }
 
+.dropdown {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 45vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+}
+
+.dropdown .no-match {
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 10px 12px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.option:last-child {
+  border-bottom: none;
+}
+
+.option.active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+}
+
+.option .name {
+  flex: 1;
+}
+
+.option .check {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -81,7 +134,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 4px 6px 4px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--panel);
@@ -90,33 +143,26 @@ h1 {
 }
 
 .chip .remove {
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  max-height: 45vh;
-  overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
-.station {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.station:last-child {
-  border-bottom: none;
-}
-
-.station .name {
-  flex: 1;
+.chip .remove:hover,
+.chip .remove:focus-visible {
+  background: var(--line);
+  color: var(--text);
 }
 
 .routes {
@@ -125,32 +171,14 @@ h1 {
 }
 
 .bullet {
-  display: inline-block;
-  min-width: 20px;
-  padding: 1px 4px;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
   font-size: 0.7rem;
   font-weight: 700;
-  text-align: center;
-}
-
-.list .hint {
-  padding: 10px 12px;
-}
-
-.creds {
-  padding: 14px 0;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field label {
-  font-size: 0.8rem;
-  color: var(--muted);
 }
 
 footer {
@@ -168,10 +196,4 @@ footer button {
   background: var(--accent);
   color: #fff;
   font-size: 1rem;
-}
-
-footer button.secondary {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  color: var(--text);
 }

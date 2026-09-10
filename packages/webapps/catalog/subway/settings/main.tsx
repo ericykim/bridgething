@@ -1,5 +1,5 @@
 import { settings, type SettingsContext } from '@bridgething/client/settings';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { parseStationIds } from '../src/config';
 import { getRoute, getStationById, type StaticStation } from '../src/static-data.ts';
@@ -7,7 +7,6 @@ import { searchStations, serializeStations } from './picker';
 import './style.css';
 
 const STATIONS_KEY = 'stations';
-const API_KEY_FIELD = 'mta_api_key';
 
 function RouteBullets({ station }: { station: StaticStation }) {
   return (
@@ -27,15 +26,126 @@ function RouteBullets({ station }: { station: StaticStation }) {
   );
 }
 
+/**
+ * Combobox for looking up stations by name (or id). Typing opens a dropdown
+ * of matching stations; picking one toggles it in the selection. Fully
+ * keyboard navigable (arrows + enter + escape) and closes on outside click.
+ */
+function StationAutocomplete({
+  selected,
+  onToggle,
+}: {
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const results = useMemo(() => {
+    if (!query.trim()) return [];
+    return searchStations(query);
+  }, [query]);
+
+  // Close the dropdown when clicking anywhere else on the page.
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  function choose(station: StaticStation) {
+    onToggle(station.id);
+    setQuery('');
+    setOpen(false);
+    inputRef.current?.focus();
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (results.length === 0) return;
+      setOpen(true);
+      setActiveIndex(i =>
+        e.key === 'ArrowDown' ? Math.min(i + 1, results.length - 1) : Math.max(i - 1, 0),
+      );
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const station = results[activeIndex];
+      if (open && station) choose(station);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      setQuery('');
+    }
+  }
+
+  const showDropdown = open && query.trim() !== '';
+  const listId = 'station-listbox';
+
+  return (
+    <div className="autocomplete" ref={rootRef} onKeyDown={onKeyDown}>
+      <div className="search">
+        <input
+          ref={inputRef}
+          type="text"
+          role="combobox"
+          aria-expanded={showDropdown && results.length > 0}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            showDropdown && results[activeIndex] ? `station-option-${results[activeIndex].id}` : undefined
+          }
+          aria-label="search stations"
+          placeholder="search stations by name or id..."
+          value={query}
+          autoCapitalize="none"
+          onInput={e => {
+            setQuery((e.target as HTMLInputElement).value);
+            setOpen(true);
+            setActiveIndex(0);
+          }}
+          onFocus={() => {
+            if (query.trim()) setOpen(true);
+          }}
+        />
+      </div>
+
+      {showDropdown && (
+        <ul id={listId} role="listbox" aria-label="station results" className="dropdown">
+          {results.length === 0 ? (
+            <li className="hint no-match">no stations match "{query}".</li>
+          ) : (
+            results.map((s, i) => (
+              <li
+                key={s.id}
+                id={`station-option-${s.id}`}
+                role="option"
+                aria-selected={selected.has(s.id)}
+                className={`option${i === activeIndex ? ' active' : ''}`}
+                // Keep the input focused so the dropdown doesn't flicker.
+                onPointerDown={e => e.preventDefault()}
+                onClick={() => choose(s)}>
+                <span className="name">{s.name}</span>
+                <RouteBullets station={s} />
+                {selected.has(s.id) && <span className="check">✓</span>}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Settings() {
   const [ctx, setCtx] = useState<SettingsContext | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [apiKey, setApiKey] = useState('');
-  const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
-
-  // The last value we wrote or loaded, so the Save button can skip no-op writes.
-  const savedApiKey = useRef('');
 
   useEffect(() => {
     (async () => {
@@ -45,8 +155,6 @@ function Settings() {
         const byKey = Object.fromEntries(entries.map(e => [e.key, e.value]));
         const stations = new Set(parseStationIds(byKey[STATIONS_KEY]));
         setSelected(stations);
-        savedApiKey.current = byKey[API_KEY_FIELD] ?? '';
-        setApiKey(savedApiKey.current);
         setStatus(`${stations.size ? '' : 'pick at least one station. '}${stations.size} selected`);
       } catch (err) {
         setStatus(errText(err));
@@ -71,22 +179,6 @@ function Settings() {
     void saveStations(next);
   }
 
-  async function saveApiKey() {
-    if (apiKey === savedApiKey.current) return;
-    try {
-      await settings.config.set(API_KEY_FIELD, apiKey);
-      savedApiKey.current = apiKey;
-      setStatus('api key saved');
-    } catch (err) {
-      setStatus(errText(err));
-    }
-  }
-
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    return searchStations(query);
-  }, [query]);
-
   const selectedStations = useMemo(
     () => [...selected].map(id => getStationById(id)).filter((s): s is StaticStation => s !== undefined),
     [selected],
@@ -100,64 +192,28 @@ function Settings() {
       </header>
 
       <section className="picker">
-        <div className="search">
-          <input
-            type="search"
-            placeholder="search stations by name or id..."
-            value={query}
-            onInput={e => setQuery((e.target as HTMLInputElement).value)}
-            autoCapitalize="none"
-          />
-        </div>
+        <StationAutocomplete selected={selected} onToggle={toggle} />
 
         {selectedStations.length > 0 && (
           <div className="chips">
             {selectedStations.map(s => (
-              <button type="button" key={s.id} className="chip" onClick={() => toggle(s.id)}>
-                {s.name} <span className="remove">×</span>
-              </button>
+              <span className="chip" key={s.id}>
+                <span className="chip-name">{s.name}</span>
+                <button
+                  type="button"
+                  className="remove"
+                  aria-label={`remove ${s.name}`}
+                  onClick={() => toggle(s.id)}>
+                  ×
+                </button>
+              </span>
             ))}
           </div>
         )}
-
-        <div className="list">
-          {query.trim() === '' ? (
-            <p className="hint">search to find stations; tap a result to add or remove it.</p>
-          ) : results.length === 0 ? (
-            <p className="hint">no stations match "{query}".</p>
-          ) : (
-            results.map(s => (
-              <label className="station" key={s.id}>
-                <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
-                <span className="name">{s.name}</span>
-                <RouteBullets station={s} />
-              </label>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="creds">
-        <div className="field">
-          <label htmlFor="mta_api_key">MTA API key (optional)</label>
-          <input
-            id="mta_api_key"
-            type="text"
-            placeholder="paste a key from api.mta.info"
-            value={apiKey}
-            onInput={e => setApiKey((e.target as HTMLInputElement).value)}
-            onBlur={saveApiKey}
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </div>
       </section>
 
       <footer>
-        <button type="button" onClick={saveApiKey}>
-          Save
-        </button>
-        <button type="button" className="secondary" onClick={() => settings.done()}>
+        <button type="button" onClick={() => settings.done()}>
           Done
         </button>
       </footer>

@@ -232,8 +232,13 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
       </Dialog>
 
       <Section>
-        <SectionHeader title="settings" hint="written to the device as you commit each field" />
-        {webapp.config.length === 0 ? (
+        <SectionHeader
+          title="settings"
+          hint={webapp.settingsHash ? 'managed by the settings page' : 'written to the device as you commit each field'}
+        />
+        {webapp.settingsHash ? (
+          <SectionEmpty>edit these with the settings page button above</SectionEmpty>
+        ) : webapp.config.length === 0 ? (
           <SectionEmpty>this app declares no tunable settings</SectionEmpty>
         ) : (
           <div class="flex flex-col gap-2">
