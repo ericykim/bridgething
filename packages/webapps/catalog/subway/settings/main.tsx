@@ -2,16 +2,16 @@ import { settings, type SettingsContext } from '@bridgething/client/settings';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { parseStationIds } from '../src/config';
-import { getRoute, getStationById, type StaticStation } from '../src/static-data.ts';
-import { searchStations, serializeStations } from './picker';
+import { getRoute, getStationById, normalizeStationName } from '../src/static-data.ts';
+import { searchStations, serializeStations, type StationGroup } from './picker';
 import './style.css';
 
 const STATIONS_KEY = 'stations';
 
-function RouteBullets({ station }: { station: StaticStation }) {
+function RouteBullets({ routes }: { routes: string[] }) {
   return (
     <span className="routes">
-      {station.routes.map(id => {
+      {routes.map(id => {
         const route = getRoute(id);
         return (
           <span
@@ -28,16 +28,12 @@ function RouteBullets({ station }: { station: StaticStation }) {
 
 /**
  * Combobox for looking up stations by name (or id). Typing opens a dropdown
- * of matching stations; picking one toggles it in the selection. Fully
- * keyboard navigable (arrows + enter + escape) and closes on outside click.
+ * of matching stations; picking one toggles it in the selection. Stations
+ * that share a name (e.g. Borough Hall's 4/5 and 2/3 entries) show as one
+ * option with all of their trains and toggle together. Fully keyboard
+ * navigable (arrows + enter + escape) and closes on outside click.
  */
-function StationAutocomplete({
-  selected,
-  onToggle,
-}: {
-  selected: Set<string>;
-  onToggle: (id: string) => void;
-}) {
+function StationAutocomplete({ selected, onToggle }: { selected: Set<string>; onToggle: (ids: string[]) => void }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -59,8 +55,8 @@ function StationAutocomplete({
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [open]);
 
-  function choose(station: StaticStation) {
-    onToggle(station.id);
+  function choose(group: StationGroup) {
+    onToggle(group.ids);
     setQuery('');
     setOpen(false);
     inputRef.current?.focus();
@@ -71,9 +67,7 @@ function StationAutocomplete({
       e.preventDefault();
       if (results.length === 0) return;
       setOpen(true);
-      setActiveIndex(i =>
-        e.key === 'ArrowDown' ? Math.min(i + 1, results.length - 1) : Math.max(i - 1, 0),
-      );
+      setActiveIndex(i => (e.key === 'ArrowDown' ? Math.min(i + 1, results.length - 1) : Math.max(i - 1, 0)));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const station = results[activeIndex];
@@ -97,9 +91,7 @@ function StationAutocomplete({
           aria-expanded={showDropdown && results.length > 0}
           aria-controls={listId}
           aria-autocomplete="list"
-          aria-activedescendant={
-            showDropdown && results[activeIndex] ? `station-option-${results[activeIndex].id}` : undefined
-          }
+          aria-activedescendant={showDropdown && results[activeIndex] ? `station-option-${activeIndex}` : undefined}
           aria-label="search stations"
           placeholder="search stations by name or id..."
           value={query}
@@ -120,21 +112,24 @@ function StationAutocomplete({
           {results.length === 0 ? (
             <li className="hint no-match">no stations match "{query}".</li>
           ) : (
-            results.map((s, i) => (
-              <li
-                key={s.id}
-                id={`station-option-${s.id}`}
-                role="option"
-                aria-selected={selected.has(s.id)}
-                className={`option${i === activeIndex ? ' active' : ''}`}
-                // Keep the input focused so the dropdown doesn't flicker.
-                onPointerDown={e => e.preventDefault()}
-                onClick={() => choose(s)}>
-                <span className="name">{s.name}</span>
-                <RouteBullets station={s} />
-                {selected.has(s.id) && <span className="check">✓</span>}
-              </li>
-            ))
+            results.map((g, i) => {
+              const allSelected = g.ids.every(id => selected.has(id));
+              return (
+                <li
+                  key={g.name}
+                  id={`station-option-${i}`}
+                  role="option"
+                  aria-selected={allSelected}
+                  className={`option${i === activeIndex ? ' active' : ''}`}
+                  // Keep the input focused so the dropdown doesn't flicker.
+                  onPointerDown={e => e.preventDefault()}
+                  onClick={() => choose(g)}>
+                  <span className="name">{g.name}</span>
+                  <RouteBullets routes={g.routes} />
+                  {allSelected && <span className="check">✓</span>}
+                </li>
+              );
+            })
           )}
         </ul>
       )}
@@ -172,17 +167,30 @@ function Settings() {
     }
   }
 
-  function toggle(id: string) {
+  /** Toggle a group: select every missing id, or clear the group entirely. */
+  function toggle(ids: string[]) {
     const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    const allSelected = ids.every(id => next.has(id));
+    for (const id of ids) {
+      if (allSelected) next.delete(id);
+      else next.add(id);
+    }
     void saveStations(next);
   }
 
-  const selectedStations = useMemo(
-    () => [...selected].map(id => getStationById(id)).filter((s): s is StaticStation => s !== undefined),
-    [selected],
-  );
+  // One chip per station name, even when several selected ids share a name.
+  const selectedChips = useMemo(() => {
+    const byName = new Map<string, { name: string; ids: string[] }>();
+    for (const id of selected) {
+      const station = getStationById(id);
+      if (!station) continue;
+      const key = normalizeStationName(station.name);
+      const chip = byName.get(key);
+      if (chip) chip.ids.push(id);
+      else byName.set(key, { name: station.name, ids: [id] });
+    }
+    return [...byName.values()];
+  }, [selected]);
 
   return (
     <main>
@@ -194,16 +202,16 @@ function Settings() {
       <section className="picker">
         <StationAutocomplete selected={selected} onToggle={toggle} />
 
-        {selectedStations.length > 0 && (
+        {selectedChips.length > 0 && (
           <div className="chips">
-            {selectedStations.map(s => (
-              <span className="chip" key={s.id}>
-                <span className="chip-name">{s.name}</span>
+            {selectedChips.map(chip => (
+              <span className="chip" key={chip.name}>
+                <span className="chip-name">{chip.name}</span>
                 <button
                   type="button"
                   className="remove"
-                  aria-label={`remove ${s.name}`}
-                  onClick={() => toggle(s.id)}>
+                  aria-label={`remove ${chip.name}`}
+                  onClick={() => toggle(chip.ids)}>
                   ×
                 </button>
               </span>

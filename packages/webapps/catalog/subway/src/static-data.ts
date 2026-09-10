@@ -40,7 +40,7 @@ interface StaticData {
 // generated JSON: shape is fixed by the generator, not by tsc's literal inference
 const data = staticJson as unknown as StaticData;
 
-const stationById = new Map(data.stations.map((s) => [s.id, s]));
+const stationById = new Map(data.stations.map(s => [s.id, s]));
 
 export function allStations(): StaticStation[] {
   return data.stations;
@@ -58,15 +58,39 @@ export function getRoute(routeId: string): StaticRoute | undefined {
 export function routesForStation(stationId: string): StaticRoute[] {
   const station = getStationById(stationId);
   if (!station) return [];
-  return station.routes.map((id) => data.routes[id]).filter((r) => r !== undefined);
+  return station.routes.map(id => data.routes[id]).filter(r => r !== undefined);
 }
 
 export function platformForDirection(station: StaticStation, direction: Direction): string {
   return station.platforms[direction];
 }
 
-function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+export function normalizeStationName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Union of the routes served by the given stations, in the MTA's official
+ * sort order (the same order the generator uses for each station's routes).
+ * Used by the settings picker to render one option per station name with all
+ * of its trains.
+ */
+export function unionRoutes(stations: StaticStation[]): string[] {
+  const seen = new Set<string>();
+  for (const station of stations) {
+    for (const routeId of station.routes) seen.add(routeId);
+  }
+  return [...seen].sort((a, b) => routePos(a) - routePos(b));
+}
+
+// route ids in the generator's official sort order; unknown ids sort last
+const routeOrder: string[] = Object.keys(data.routes);
+const routePosCache = new Map(routeOrder.map((id, i) => [id, i]));
+function routePos(routeId: string): number {
+  return routePosCache.get(routeId) ?? routeOrder.length;
 }
 
 /**
@@ -74,21 +98,21 @@ function normalizeName(name: string): string {
  * then whole-word prefix matches, then substring matches.
  */
 export function findStationsByName(query: string): StaticStation[] {
-  const q = normalizeName(query);
+  const q = normalizeStationName(query);
   if (!q) return [];
   const scored: Array<{ station: StaticStation; score: number }> = [];
   for (const station of data.stations) {
-    const name = normalizeName(station.name);
+    const name = normalizeStationName(station.name);
     let score: number | null = null;
     if (name === q) score = 0;
-    else if (name.split(' ').some((w) => w.startsWith(q))) score = 1;
+    else if (name.split(' ').some(w => w.startsWith(q))) score = 1;
     else if (name.includes(q)) score = 2;
     if (score !== null) scored.push({ station, score });
   }
   return scored
     .sort((a, b) => a.score - b.score || (a.station.name < b.station.name ? -1 : 1))
     .slice(0, 20)
-    .map((s) => s.station);
+    .map(s => s.station);
 }
 
 /**
