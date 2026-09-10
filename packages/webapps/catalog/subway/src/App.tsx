@@ -89,8 +89,8 @@ function useNow(intervalMs: number): number {
  * soonest arrival. Wheel rotation scrolls natively (overflow-y, clamps at the
  * ends); if a webview instead emits rotation as arrow keys, they map to a
  * scroll step of about one viewport. Wheel press arrives as an Enter keydown
- * and flips the direction for every row. Countdowns tick every second; data refreshes on the poller's
- * 30 s cadence. Alerts poll on the slower AlertPoller cadence: rows with an
+ * and flips the direction for every row. Countdowns tick every second; data
+ * refreshes on the poller's 30 s cadence. Alerts poll on the slower AlertPoller cadence: rows with an
  * active alert on their line carry an indicator + text; alerts with no row to
  * sit on surface in a screen-level banner. Stale feeds keep the last known
  * times, dimmed with an "old" marker, and recover automatically on reconnect.
@@ -185,8 +185,8 @@ function Board({
         return;
       }
       // Wheel-rotation fallback: rotation may arrive as arrow keys instead of
-      // native scroll; step the board scroller (native scroll path ignores
-      // these keys, so the fallback only fires when rotation needs it).
+      // native scroll; step the board scroller. preventDefault stops the
+      // browser's own arrow-key scroll so the fallback never double-applies.
       const scroller = scrollerRef.current;
       if (!scroller) return;
       const delta = scrollDeltaForKey(e.key, scroller.clientHeight);
