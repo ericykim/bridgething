@@ -1,0 +1,170 @@
+<!doctype html>
+<!--
+  Demo: subway time-pill carousel.
+  Front train counts down; at 0 it shows "now", then departs (fades and
+  collapses left), the pills behind slide forward and grow into their new
+  slots, and a new back pill slides in from the right.
+  Open in any browser. No build, no deps.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>time pill carousel demo</title>
+<style>
+  :root {
+    --bg: #0a0c0e;
+    --card: #17181a; /* bg + white 8% (neutral-soft) */
+    --off-white: #efefef;
+    --soft: rgba(239, 239, 239, 0.55);
+    --dim: rgba(239, 239, 239, 0.35);
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    display: grid;
+    place-items: center;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 720px;
+    box-sizing: border-box;
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px 20px;
+  }
+  .bullet {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #00933c;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 19px;
+  }
+  .names { flex: 1; min-width: 0; }
+  .headsign { color: var(--off-white); font-weight: 700; font-size: 19px; }
+  .station { color: var(--dim); font-weight: 600; font-size: 15px; margin-top: 2px; }
+
+  .pills { display: flex; align-items: center; }
+
+  .pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    background: var(--card); /* opaque: lets a pill occlude the one behind */
+    padding: 0 12px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    position: relative;
+    transition:
+      width 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+      height 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+      margin-left 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+      color 0.45s ease,
+      font-size 0.45s ease,
+      opacity 0.3s ease,
+      transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* slots: front is biggest, brightest, on top */
+  .s0 { z-index: 2; width: 96px; height: 48px; font-size: 25px; font-weight: 700; color: var(--off-white); margin-left: 0; }
+  .s1 { z-index: 1; width: 80px; height: 40px; font-size: 21px; font-weight: 600; color: var(--soft); margin-left: -32px; }
+  .s2 { z-index: 0; width: 80px; height: 36px; font-size: 18px; font-weight: 600; color: var(--dim); margin-left: -32px; }
+
+  .pill.exiting { opacity: 0; transform: translateX(-24px) scale(0.9); }
+  .pill.entering { opacity: 0; transform: translateX(16px) scale(0.85); }
+
+  .hint {
+    position: fixed;
+    bottom: 24px;
+    width: 100%;
+    text-align: center;
+    color: var(--dim);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="bullet">4</span>
+    <div class="names">
+      <div class="headsign">Woodlawn</div>
+      <div class="station">Borough Hall</div>
+    </div>
+    <div class="pills" id="pills"></div>
+  </div>
+  <div class="hint">front train departs when it hits 0, back pills slide up, new one enters</div>
+
+<script>
+  const pillsEl = document.getElementById('pills');
+  // minutes per visible slot; front counts down to departure
+  let minutes = [5, 9, 20];
+  const els = [];
+
+  const fmt = m => (m <= 0 ? 'now' : `${m} min`);
+
+  function makePill(slot) {
+    const el = document.createElement('span');
+    el.className = `pill s${slot}`;
+    return el;
+  }
+
+  function relayout() {
+    els.forEach((el, i) => {
+      el.classList.remove('s0', 's1', 's2');
+      el.classList.add(`s${i}`);
+    });
+  }
+
+  // initial render
+  minutes.forEach((m, i) => {
+    const el = makePill(i);
+    el.textContent = fmt(m);
+    pillsEl.appendChild(el);
+    els.push(el);
+  });
+
+  function depart() {
+    const front = els.shift();
+    // collapse: fade + slide left, then pull width out from under siblings
+    front.classList.add('exiting');
+    requestAnimationFrame(() => {
+      front.style.marginLeft = `${-front.offsetWidth - 2}px`;
+    });
+    setTimeout(() => front.remove(), 500);
+
+    // survivors slide forward and grow into their new slots
+    relayout();
+
+    // new back pill enters from behind/right
+    const last = minutes[minutes.length - 1];
+    minutes.push(last + 6 + Math.floor(Math.random() * 10));
+    const el = makePill(2);
+    el.textContent = fmt(minutes[2]);
+    el.classList.add('entering');
+    pillsEl.appendChild(el);
+    els.push(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('entering')));
+  }
+
+  setInterval(() => {
+    minutes = minutes.map(m => m - 1);
+    if (minutes[0] < 0) {
+      minutes.shift();
+      depart();
+    }
+    els.forEach((el, i) => { el.textContent = fmt(minutes[i]); });
+  }, 1000);
+</script>
+</body>
+</html>

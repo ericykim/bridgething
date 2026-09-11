@@ -242,8 +242,14 @@ function Board({
     <>
       <header className="mb-3 border-b border-rule px-3 pt-3 pb-3">
         <div className="font-mono text-eyebrow text-dim font-semibold uppercase w-full flex items-baseline justify-between gap-3">
-        <div className="text-white">{direction === 'N' ? 'inbound' : 'outbound'}</div>
-          {stale && <span className="text-warn">⚠ offline</span>}
+        <div>
+            <span className="text-white">{direction === 'N' ? 'inbound' : 'outbound'}</span>
+          </div>
+          {stale ? (
+            <span className="text-warn">⚠ offline</span>
+          ) : (
+            <span className="text-ok">● live</span>
+          )}
         </div>
       </header>
       <main ref={scrollerRef} className="flex-1 overflow-y-auto px-4 pb-6">
@@ -272,6 +278,17 @@ function Board({
   );
 }
 
+/** Time-pill recession: outlined pills overlap like a card carousel - the
+ *  next train is biggest, brightest, and on top; each later train is
+ *  smaller, dimmer, and tucked behind (negative margin + lower z-index).
+ *  The opaque fill matches the card bg so a pill occludes the one behind
+ *  it. Fixed widths keep the front pill at the same x on every row. */
+const TIME_SLOTS = [
+  { box: 'z-20 h-9 w-20 text-off-white font-display text-row font-bold' },
+  { box: 'z-10 -ml-3 h-9 w-20 text-soft font-mono text-row font-semibold' },
+  { box: 'z-0 -ml-3 h-9 w-20 text-dim font-mono text-row font-semibold' },
+];
+
 function BoardRowView({
   row,
   now,
@@ -281,20 +298,42 @@ function BoardRowView({
   now: number;
   stale: boolean;
 }) {
-  const minutes = minutesUntil(row.next.arrivalAt, now);
   const bulletStyle = row.color ? { backgroundColor: `#${row.color}` } : undefined;
   const bulletText =
     row.textColor != null ? { color: `#${row.textColor}` } : undefined;
+  // Departure carousel: a train at 0 min holds "now" for a beat, plays its
+  // exit, then leaves the rendered list (the feed only drops it on the next
+  // poll) so the pills behind slide forward and a new back pill enters.
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
+  const [exitingIds, setExitingIds] = useState<ReadonlySet<string>>(new Set());
+  // 3 visible pills; the 4th (FOLLOWING_CAP spare) slides in the moment the
+  //  front train is hidden, so the stack never sits short.
+  const times = [row.next, ...row.following].filter((a) => !hiddenIds.has(a.tripId)).slice(0, 3);
+  const frontId = times[0]?.tripId ?? null;
+  const frontM = times[0] ? minutesUntil(times[0].arrivalAt, now) : null;
+
+  useEffect(() => {
+    if (frontId == null || frontM !== 0) return;
+    let t2: ReturnType<typeof setTimeout> | undefined;
+    const t1 = setTimeout(() => {
+      setExitingIds((s) => new Set(s).add(frontId));
+      t2 = setTimeout(() => setHiddenIds((s) => new Set(s).add(frontId)), 500);
+    }, 1000);
+    return () => {
+      clearTimeout(t1);
+      if (t2) clearTimeout(t2);
+    };
+  }, [frontId, frontM]);
 
   return (
     <div
-      className={`flex flex-col border border-rule bg-screen transition-opacity ${
+      className={`flex flex-col rounded-xl bg-neutral-soft transition-opacity ${
         stale ? 'opacity-50' : ''
       }`}
     >
       <div className="flex items-center gap-3 px-4 py-3">
         <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold text-white"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-mono text-row font-bold text-white"
           style={bulletStyle}
         >
           <span style={bulletText}>{row.routeId}</span>
@@ -305,21 +344,15 @@ function BoardRowView({
             <div className="truncate font-mono text-hint text-dim font-semibold">{row.stationName}</div>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {row.following.map((a) => {
-            const m = minutesUntil(a.arrivalAt, now);
-            return (
-              <span
-                key={a.tripId}
-                className="rounded-full border border-rule px-2 py-0.5 font-mono text-hint text-dim"
-              >
-                {m === 0 ? 'now' : m}
-              </span>
-            );
-          })}
-        </div>
-        <div className="w-16 shrink-0 text-right font-display text-title">
-          {minutes === 0 ? 'now' : <>{minutes}<span className="ml-1 font-mono text-hint text-dim">min</span></>}
+        <div className="flex shrink-0 items-center">
+          {times.map((a, i) => (
+            <TimePill
+              key={a.tripId}
+              minutes={minutesUntil(a.arrivalAt, now)}
+              slotClass={TIME_SLOTS[Math.min(i, TIME_SLOTS.length - 1)]!.box}
+              exiting={exitingIds.has(a.tripId)}
+            />
+          ))}
         </div>
       </div>
       {row.alerts.length > 0 && (
@@ -332,6 +365,49 @@ function BoardRowView({
         />
       )}
     </div>
+  );
+}
+
+/** One time pill. Mounts with an enter-from-behind slide; when `exiting`
+ *  flips, fades and slides left while its margin collapses to its full
+ *  negative width, pulling the pills behind it forward. Slot classes carry
+ *  the size/tone; the transition list animates class swaps when a pill is
+ *  promoted to a front slot. */
+function TimePill({
+  minutes,
+  slotClass,
+  exiting,
+}: {
+  minutes: number;
+  slotClass: string;
+  exiting: boolean;
+}) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (exiting && el) el.style.marginLeft = `${-el.offsetWidth}px`;
+  }, [exiting]);
+
+  const motion = exiting
+    ? '-translate-x-4 scale-90 opacity-0'
+    : entered
+      ? ''
+      : 'translate-x-4 scale-90 opacity-0';
+
+  return (
+    <span
+      ref={ref}
+      className={`flex items-center justify-center rounded-full border border-current bg-card-surface px-3 transition-[width,height,margin-left,color,font-size,opacity,transform,translate,scale] duration-500 ease-out ${slotClass} ${motion}`}
+    >
+      {minutes === 0 ? 'now' : `${minutes} min`}
+    </span>
   );
 }
 
@@ -352,6 +428,10 @@ function AlertCarousel({
 }) {
   // pos advances forever; the index wraps, so a single alert re-runs its marquee
   const [pos, setPos] = useState(0);
+  // Doubled render: long text shows two copies so shifting by exactly one
+  // copy width loops seamlessly. Short text stays a single copy; the effect
+  // flips this once it has measured an overflow.
+  const [doubled, setDoubled] = useState(false);
   const clipRef = useRef<HTMLDivElement | null>(null);
   const textRef = useRef<HTMLSpanElement | null>(null);
 
@@ -363,31 +443,33 @@ function AlertCarousel({
     const span = textRef.current;
     if (!clip || !span) return;
     span.style.animation = '';
-    const overflow = span.scrollWidth - clip.clientWidth;
-    if (overflow <= 4) {
+    const copyWidth = doubled ? span.scrollWidth / 2 : span.scrollWidth;
+    if (copyWidth - clip.clientWidth <= 4) {
       // fits: hold, then rotate to the next item
+      if (doubled) setDoubled(false);
       if (items.length > 1) {
         const t = setTimeout(() => setPos((p) => p + 1), 6000);
         return () => clearTimeout(t);
       }
       return;
     }
-    // too long: pause, marquee the overflow, then park at the end for a beat
-    // before advancing. The forwards fill keeps the tail readable during the
-    // park; the advance timer runs duration + park, not park alone, so the
-    // marquee is never interrupted mid-scroll.
-    const duration = Math.max(4000, overflow * 18);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    timer = setTimeout(() => {
-      span.style.setProperty('--marquee-shift', `${-overflow - 8}px`);
-      span.style.animation = `alert-marquee ${duration}ms linear forwards`;
-      timer = setTimeout(() => setPos((p) => p + 1), duration + 2000);
-    }, 1500);
+    if (!doubled) {
+      // too long, single copy on screen: re-render doubled, then loop
+      setDoubled(true);
+      return;
+    }
+    // too long, doubled: loop the marquee forever like a carousel. The
+    // advance timer fires exactly at a loop boundary, so swapping in the
+    // next alert (or re-running the same one) is invisible.
+    const duration = Math.max(4000, copyWidth * 18);
+    span.style.setProperty('--marquee-shift', `${-copyWidth}px`);
+    span.style.animation = `alert-marquee ${duration}ms linear infinite`;
+    const timer = setTimeout(() => setPos((p) => p + 1), duration);
     return () => {
-      if (timer) clearTimeout(timer);
+      clearTimeout(timer);
       span.style.animation = '';
     };
-  }, [pos, text, items.length]);
+  }, [pos, text, items.length, doubled]);
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
@@ -401,7 +483,7 @@ function AlertCarousel({
           ref={textRef}
           className="inline-block whitespace-nowrap  text-hint text-warn will-change-transform"
         >
-          {text}
+          {doubled ? <>{text}&nbsp;&nbsp;·&nbsp;&nbsp;{text}&nbsp;&nbsp;·&nbsp;&nbsp;</> : text}
         </span>
       </div>
     </div>

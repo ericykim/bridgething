@@ -9,8 +9,9 @@ import { getRoute, getStationById, type Direction } from './static-data';
 import type { Arrival } from './feeds';
 import type { TransitAlert } from './alerts.ts';
 
-/** Max following-train chips rendered on a row (~4-5 fit the row height). */
-export const FOLLOWING_CAP = 5;
+/** Following trains kept per row: 3 visible pills + 1 spare so the stack
+ *  refills the instant the front train departs. */
+export const FOLLOWING_CAP = 3;
 
 export type BoardRow = {
   routeId: string;
